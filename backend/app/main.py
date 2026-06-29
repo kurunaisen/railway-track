@@ -1,6 +1,5 @@
 import logging
-
-
+import os
 
 from fastapi import FastAPI, Request
 
@@ -110,6 +109,10 @@ app.include_router(admin.router)
 
 
 
+def _env_present(name: str) -> bool:
+    return bool(str(os.environ.get(name, "")).strip())
+
+
 @app.get("/health")
 
 def health():
@@ -141,6 +144,26 @@ def health():
             "openai": bool(settings.openai_api_key),
 
             "anthropic": bool(settings.anthropic_api_key),
+
+        },
+
+        "env_present": {
+
+            "ASR_PROVIDER": _env_present("ASR_PROVIDER"),
+
+            "YANDEX_SPEECH_API_KEY": _env_present("YANDEX_SPEECH_API_KEY"),
+
+            "YANDEX_SPEECH_FOLDER_ID": _env_present("YANDEX_SPEECH_FOLDER_ID"),
+
+            "OPENAI_API_KEY": _env_present("OPENAI_API_KEY"),
+
+            "ANTHROPIC_API_KEY": _env_present("ANTHROPIC_API_KEY"),
+
+            "DATABASE_URL": _env_present("DATABASE_URL"),
+
+            "STORAGE_BACKEND": _env_present("STORAGE_BACKEND"),
+
+            "SUPABASE_URL": _env_present("SUPABASE_URL"),
 
         },
 
