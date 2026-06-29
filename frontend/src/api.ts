@@ -126,6 +126,22 @@ export function normalizeSession(raw: Partial<AudioSession> & Pick<AudioSession,
   };
 }
 
+function formatApiError(body: string, status: number): string {
+  if (!body.trim()) return `HTTP ${status}`;
+  try {
+    const j = JSON.parse(body) as { detail?: unknown };
+    if (typeof j.detail === "string") return j.detail;
+    if (Array.isArray(j.detail)) {
+      return j.detail
+        .map((item) => (typeof item === "object" && item && "msg" in item ? String(item.msg) : String(item)))
+        .join("; ");
+    }
+    return JSON.stringify(j);
+  } catch {
+    return body;
+  }
+}
+
 async function apiFetch(url: string, init?: RequestInit) {
   const res = await fetch(url, {
     ...init,
@@ -133,12 +149,8 @@ async function apiFetch(url: string, init?: RequestInit) {
   });
   if (res.status === 401) throw new Error("Требуется авторизация");
   if (!res.ok) {
-    try {
-      const j = await res.json();
-      throw new Error(j.detail || JSON.stringify(j));
-    } catch {
-      throw new Error(await res.text());
-    }
+    const body = await res.text();
+    throw new Error(formatApiError(body, res.status));
   }
   return res;
 }
