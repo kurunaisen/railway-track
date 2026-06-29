@@ -54,6 +54,13 @@ export async function login(username: string, password: string): Promise<AuthUse
 }
 
 export async function checkHealth(): Promise<{ auth_required: boolean }> {
-  const res = await fetch(healthUrl());
-  return res.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(healthUrl(), { signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+  }
 }

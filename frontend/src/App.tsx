@@ -16,6 +16,7 @@ import {
   uploadAudio,
 } from "./api";
 import { type AuthUser, checkHealth, clearAuth, getUser } from "./auth";
+import { healthUrl } from "./config";
 import Login from "./Login";
 
 async function pollUntilDone(jobId: number, sessionId: number): Promise<AudioSession> {
@@ -30,7 +31,13 @@ async function pollUntilDone(jobId: number, sessionId: number): Promise<AudioSes
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(() => getUser());
-  const [authRequired, setAuthRequired] = useState<boolean | null>(null);
+  const [authRequired, setAuthRequired] = useState<boolean | null>(() =>
+    typeof window !== "undefined" &&
+    (window.location.hostname.endsWith(".vercel.app") ||
+      window.location.hostname.endsWith(".vercel.sh"))
+      ? true
+      : null
+  );
   const [session, setSession] = useState<AudioSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [queueStatus, setQueueStatus] = useState<string | null>(null);
@@ -45,10 +52,37 @@ export default function App() {
   const editable = user ? canEdit(user.role) : false;
 
   useEffect(() => {
-    checkHealth().then((h) => {
-      setAuthRequired(h.auth_required);
-      if (!h.auth_required && !user) setUser({ username: "dev", role: "operator" });
-    });
+    let cancelled = false;
+    const fallback = window.setTimeout(() => {
+      if (!cancelled) {
+        setAuthRequired(true);
+        setError((prev) =>
+          prev ??
+          "API не ответил вовремя — показана форма входа. Если вход не работает, проверьте VITE_API_URL (Production) на Vercel и redeploy."
+        );
+      }
+    }, 8000);
+
+    checkHealth()
+      .then((h) => {
+        if (cancelled) return;
+        window.clearTimeout(fallback);
+        setAuthRequired(h.auth_required);
+        if (!h.auth_required && !user) setUser({ username: "dev", role: "operator" });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        window.clearTimeout(fallback);
+        setError(
+          "Не удалось подключиться к API. Проверьте VITE_API_URL на Vercel (Production, https://....up.railway.app) и CORS на Railway."
+        );
+        setAuthRequired(true);
+      });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallback);
+    };
   }, []);
 
   const handleFile = async (file: File) => {
@@ -183,7 +217,20 @@ export default function App() {
   };
 
   if (authRequired === null) {
-    return <div className="app loading-screen">Загрузка…</div>;
+    return (
+      <div className="app loading-screen">
+        <p>Загрузка…</p>
+        {error ? (
+          <div className="error" style={{ maxWidth: 520, marginTop: 16, textAlign: "left" }}>
+            {error}
+          </div>
+        ) : (
+          <p className="hint" style={{ marginTop: 12 }}>
+            Подключение к {healthUrl()}
+          </p>
+        )}
+      </div>
+    );
   }
 
   if (authRequired && !user) {

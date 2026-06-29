@@ -69,8 +69,16 @@ class Settings(BaseSettings):
     # ── Deployment ──
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     vercel_url: str = ""  # https://your-app.vercel.app — добавляется в CORS автоматически
+    cors_allow_vercel_domains: bool = True  # разрешить https://*.vercel.app (деплой на Vercel)
     trust_proxy_headers: bool = False
     max_upload_mb: int = 100
+
+    @field_validator("vercel_url", mode="before")
+    @classmethod
+    def strip_vercel_url(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
     @field_validator("cors_origins", mode="before")
     @classmethod

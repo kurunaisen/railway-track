@@ -66,6 +66,10 @@ app.add_middleware(
 
     allow_origins=settings.effective_cors_origins,
 
+    allow_origin_regex=(
+        r"https://[\w-]+\.vercel\.app" if settings.cors_allow_vercel_domains else None
+    ),
+
     allow_credentials=True,
 
     allow_methods=["*"],
@@ -123,6 +127,10 @@ def health():
             "storage": settings.storage_backend,
 
             "frontend": "Vercel" if settings.vercel_url else "local",
+
+            "cors_vercel_regex": settings.cors_allow_vercel_domains,
+
+            "cors_origins_count": len(settings.effective_cors_origins),
 
         },
 
