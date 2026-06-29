@@ -62,18 +62,125 @@
 
 ---
 
-## 2. API-ключи нейросетей
+## 2. API-ключи Yandex SpeechKit (проверено по док. Yandex Cloud, июнь 2026)
 
-| Сервис | Переменная | Где получить |
-|--------|-----------|--------------|
-| Yandex SpeechKit | `YANDEX_SPEECH_API_KEY`, `YANDEX_SPEECH_FOLDER_ID` | [Yandex Cloud](https://cloud.yandex.ru/docs/speechkit/) |
-| ChatGPT | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com/) |
-| Claude | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) |
+Официальные инструкции:
+- [Создание API-ключа](https://yandex.cloud/ru/docs/iam/operations/api-key/create)
+- [ID каталога](https://yandex.cloud/ru/docs/resource-manager/operations/folder/get-id)
+- [Назначение роли](https://yandex.cloud/ru/docs/iam/operations/roles/grant)
+- [Роль SpeechKit STT](https://yandex.cloud/ru/docs/speechkit/security/)
 
-Рекомендуемые настройки (уже в `.env.cloud.example`):
+Нужны две переменные для Railway: `YANDEX_SPEECH_API_KEY` и `YANDEX_SPEECH_FOLDER_ID`.
+
+---
+
+### 2.1. Войти в консоль
+
+1. Откройте **https://console.yandex.cloud/**
+2. Войдите через **Яндекс ID**
+3. **Проверка:** видите дашборд с названием облака/каталога вверху
+
+Если просит платёжный аккаунт — создайте его (Billing → статус `ACTIVE` или `TRIAL_ACTIVE`).
+
+---
+
+### 2.2. Получить `YANDEX_SPEECH_FOLDER_ID`
+
+**Способ A — из адресной строки (самый надёжный):**
+
+1. Вверху страницы нажмите на **название каталога** (например `default`) и выберите каталог, в котором будете работать
+2. Посмотрите URL в браузере — он станет таким:
+   ```
+   https://console.yandex.cloud/folders/b1gxxxxxxxxxxxxxxxxxx
+   ```
+3. Часть после `/folders/` — это **ID каталога** → `YANDEX_SPEECH_FOLDER_ID`
+
+**Способ B — на дашборде (по док. Yandex):**
+
+1. Выберите каталог (см. выше)
+2. На главной странице каталога **под названием каталога** показан идентификатор — наведите и нажмите иконку копирования
+
+**Способ C — «Информация о каталоге»:**
+
+1. Справа от названия каталога → **⋮** (три точки) → **Информация о каталоге**
+2. Поле **Идентификатор каталога** → скопировать
+
+**Проверка:** ID начинается с `b1` и ~20 символов, например `b1g2abc3def4ghi5jkl6m`
+
+---
+
+### 2.3. Создать сервисный аккаунт
+
+1. Убедитесь, что вверху выбран **нужный каталог**
+2. Слева откройте меню **≡** → **Identity and Access Management**  
+   (в русской консоли может называться так же, на английском)
+3. Слева в IAM: **Сервисные аккаунты**
+4. Кнопка **Создать сервисный аккаунт**
+5. Имя: `speechkit-railway` (латиница, 3–63 символа)
+6. **Добавить роль** → выберите **`speechkit-stt.user`** или полное имя **`ai.speechkit-stt.user`**
+7. **Создать**
+
+**Проверка:** в списке «Сервисные аккаунты» появилась строка `speechkit-railway`
+
+> Если роли нет при создании — назначьте отдельно (шаг 2.4).
+
+---
+
+### 2.4. Роль `ai.speechkit-stt.user` (если не назначили)
+
+По [док. Yandex](https://yandex.cloud/ru/docs/iam/operations/roles/grant):
+
+1. Вверху выберите **каталог**
+2. Вкладка **Права доступа**
+3. **Настроить доступ**
+4. Найдите сервисный аккаунт `speechkit-railway`
+5. **Добавить роль** → **`ai.speechkit-stt.user`**
+6. **Сохранить**
+
+---
+
+### 2.5. Создать `YANDEX_SPEECH_API_KEY`
+
+По [док. Yandex](https://yandex.cloud/ru/docs/iam/operations/api-key/create):
+
+1. **Identity and Access Management** → **Сервисные аккаунты**
+2. Откройте **`speechkit-railway`**
+3. Вверху: **Создать новый ключ** → **Создать API-ключ**
+4. Описание: `railway-backend`
+5. **Область действия** — отметьте минимум:
+   - **`yc.ai.speechkitStt.execute`** (распознавание речи)
+6. **Создать**
+7. **Сразу скопируйте секретный ключ** (начинается с `AQVN...`) — после закрытия окна его не покажут
+
+→ это значение для `YANDEX_SPEECH_API_KEY`
+
+**Не путайте:**
+- ✅ **API-ключ** сервисного аккаунта (`AQVN...`)
+- ❌ OAuth-токен пользователя
+- ❌ IAM-токен (живёт ~12 часов)
+
+---
+
+### 2.6. Записать в Railway
+
+| Variable | Пример |
+|----------|--------|
+| `ASR_PROVIDER` | `yandex` |
+| `YANDEX_SPEECH_FOLDER_ID` | `b1gxxxxxxxxxxxxxxxxxx` |
+| `YANDEX_SPEECH_API_KEY` | `AQVNxxxxxxxx...` |
+
+**Redeploy** → проверка: `https://ВАШ-BACKEND/health` → `"yandex_speechkit": true`
+
+---
+
+## 2b. ChatGPT и Claude (кратко)
+
+| Сервис | Variable | Где |
+|--------|----------|-----|
+| ChatGPT | `OPENAI_API_KEY` | https://platform.openai.com/api-keys |
+| Claude | `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys |
 
 ```env
-ASR_PROVIDER=yandex
 PARSER_MODE=hybrid
 LLM_PRIMARY_PARSER=openai
 LLM_REVIEW_DISPUTED=true
@@ -107,13 +214,49 @@ LLM_REVIEW_DISPUTED=true
 
 ---
 
-### Шаг 3.3. Указать папку `backend`
+### Шаг 3.3. Папка `backend` (два способа)
 
-1. Откроется страница сервиса (карточка с названием репозитория).
-2. Перейдите на вкладку **Settings** (вверху).
-3. Прокрутите до блока **Source** (или **Root Directory** / **Service Root**).
-4. В поле **Root Directory** введите: `backend`
-5. Нажмите **Save** или галочку — Railway пересоберёт проект из папки `backend` (там лежат `Dockerfile` и `railway.toml`).
+Railway часто **не показывает** Root Directory, если вы смотрите настройки **всего проекта**, а не **одного сервиса**. Есть два рабочих варианта.
+
+---
+
+#### Способ 1 — проще: ничего не менять (рекомендуется)
+
+В корне репозитория лежит **`Dockerfile`** — он собирает бэкенд из папки `backend`.  
+Root Directory **не нужен**.
+
+1. Убедитесь, что на GitHub в репо есть файл **`Dockerfile`** в корне (не только в `backend/`).
+2. Railway сам найдёт его и соберёт API.
+
+Если деплой уже идёт из GitHub — просто дождитесь сборки или нажмите **Redeploy**.
+
+---
+
+#### Способ 2 — Root Directory (если хотите использовать `backend/Dockerfile`)
+
+1. На главной странице проекта Railway вы видите **схему** (прямоугольник с названием репозитория, например `railway-track`).
+2. **Кликните по этому прямоугольнику** (это сервис, не проект).
+3. Откроется панель сервиса → вкладка **Settings**.
+4. Прокрутите до раздела **Build** (не «Project Settings» слева в меню!).
+5. Поле **Root Directory** → введите `backend` (можно с `/` или без).
+6. Нажмите **Deploy** или галочку сохранения.
+
+**Если Root Directory нет даже там:**
+
+- **Settings** → **Variables** → добавьте:
+  ```
+  RAILWAY_DOCKERFILE_PATH=backend/Dockerfile
+  ```
+- И **Root Directory** оставьте пустым или `/`.
+
+---
+
+#### Как понять, что вы не там
+
+| Где вы | Что видите | Это не то |
+|--------|------------|-----------|
+| Шестерёнка **Project Settings** (слева в проекте) | Members, Usage, Danger | Root Directory здесь **нет** |
+| **Клик по сервису** → Settings | Build, Source, Networking | **Здесь** ищите Root Directory |
 
 ---
 
@@ -237,24 +380,141 @@ CORS_ORIGINS=["https://ваш-сайт.vercel.app"]
 
 ---
 
-## 4. Vercel (фронтенд)
+## 4. Vercel (фронтенд — сайт в браузере) — пошагово
 
-1. [vercel.com](https://vercel.com) → **Import Git Repository**.
-2. **Root Directory** = `frontend`.
-3. **Environment Variables**:
+> **Что это:** Vercel публикует **интерфейс** (кнопки, формы). **API** остаётся на Railway.  
+> **Перед Vercel** нужен работающий бэкенд на Railway (шаг 3) и код на GitHub.
 
-| Переменная | Значение |
-|-----------|----------|
-| `VITE_API_URL` | `https://YOUR-BACKEND.up.railway.app` (без `/api`) |
+---
 
-4. Deploy.
+### Шаг 4.0. Что должно быть готово
 
-5. В Railway добавьте URL Vercel:
+- [ ] Код на GitHub (репозиторий `railway-track` или ваш)
+- [ ] Railway: деплой **успешный** (Deployments → зелёная галочка)
+- [ ] Railway: есть **публичный URL** бэкенда (см. ниже)
 
-```env
-VERCEL_URL=https://your-app.vercel.app
-CORS_ORIGINS=["https://your-app.vercel.app"]
+#### Как получить URL бэкенда на Railway
+
+1. Откройте [railway.app](https://railway.app) → ваш проект
+2. Кликните **сервис** (прямоугольник с названием репо)
+3. Вкладка **Settings** → блок **Networking**
+4. Если домена нет → **Generate Domain**
+5. Скопируйте URL, например:
+   ```
+   https://railway-track-production.up.railway.app
+   ```
+6. Проверка в браузере: откройте `https://ВАШ-URL/health` → JSON `"status": "ok"`
+
+**Запишите этот URL** — он понадобится как `VITE_API_URL`.
+
+---
+
+### Шаг 4.1. Регистрация на Vercel
+
+1. Откройте **https://vercel.com**
+2. **Sign Up** → **Continue with GitHub**
+3. Разрешите Vercel доступ к GitHub (Authorize)
+
+---
+
+### Шаг 4.2. Импорт проекта
+
+1. На главной Vercel нажмите **Add New…** → **Project**
+2. В списке **Import Git Repository** найдите **`railway-track`**
+   - если нет → **Adjust GitHub App Permissions** → дайте доступ к репозиторию
+3. Нажмите **Import** напротив `railway-track`
+
+---
+
+### Шаг 4.3. Настройки сборки (важно)
+
+На странице **Configure Project**:
+
+| Поле | Значение |
+|------|----------|
+| **Framework Preset** | Vite (обычно определится сам) |
+| **Root Directory** | нажмите **Edit** → введите `frontend` → **Continue** |
+| **Build Command** | оставить `npm run build` |
+| **Output Directory** | `dist` |
+
+---
+
+### Шаг 4.4. Переменная окружения (связь с Railway)
+
+Раскройте **Environment Variables** и добавьте:
+
+| Name | Value |
+|------|-------|
+| `VITE_API_URL` | `https://ВАШ-BACKEND.up.railway.app` |
+
+**Важно:**
+- вставьте **ваш** Railway URL из шага 4.0
+- **без** `/api` в конце
+- **без** слэша в конце
+
+Пример:
 ```
+VITE_API_URL=https://railway-track-production.up.railway.app
+```
+
+Environment: **Production** (и можно дублировать для Preview).
+
+---
+
+### Шаг 4.5. Деплой
+
+1. Нажмите **Deploy**
+2. Подождите 1–3 минуты (Building → Ready)
+3. **Проверка:** появится **Congratulations** и ссылка вида:
+   ```
+   https://railway-track-xxxxx.vercel.app
+   ```
+4. Нажмите **Visit** — откроется сайт «Обход пути»
+
+Если сборка **Failed** → **View Build Logs** → пришлите текст ошибки.
+
+---
+
+### Шаг 4.6. CORS на Railway (после Vercel)
+
+Без этого шага браузер **блокирует** запросы с Vercel к Railway.
+
+1. Скопируйте URL сайта с Vercel, например:
+   ```
+   https://railway-track-xxxxx.vercel.app
+   ```
+2. Откройте [railway.app](https://railway.app) → ваш проект → **сервис бэкенда**
+3. Вкладка **Variables**
+4. Добавьте **две** переменные:
+
+| Name | Value |
+|------|-------|
+| `VERCEL_URL` | `https://railway-track-xxxxx.vercel.app` |
+| `CORS_ORIGINS` | `["https://railway-track-xxxxx.vercel.app"]` |
+
+5. Подставьте **ваш** Vercel URL (как в шаге 4.5)
+6. Сохраните — Railway **сам перезапустит** бэкенд (1–2 мин)
+
+**Проверка CORS:** откройте сайт Vercel → F12 → Network → загрузите файл.  
+Запрос `upload` должен идти на `....railway.app`, статус **200**, не CORS error.
+
+---
+
+### Шаг 4.7. Вход на сайт
+
+1. Откройте URL Vercel
+2. Логин: `admin`
+3. Пароль: тот, что задали в Railway как `DEFAULT_ADMIN_PASSWORD`  
+   (если не задавали — по умолчанию `admin`)
+
+---
+
+### Если меняли `VITE_API_URL` после деплоя
+
+Переменные `VITE_*` вшиваются **при сборке**. После изменения:
+
+1. Vercel → проект → **Deployments**
+2. **⋯** у последнего деплоя → **Redeploy**
 
 ---
 

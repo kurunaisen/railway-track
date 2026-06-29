@@ -59,6 +59,7 @@ class Settings(BaseSettings):
 
     default_admin_username: str = "admin"
     default_admin_password: str = "admin"
+    admin_password_reset: str = ""  # если задан — перезаписать пароль admin при старте (см. docs)
 
     # ── Task queue (Redis + Celery) ──
     use_task_queue: bool = False

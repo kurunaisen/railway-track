@@ -61,8 +61,12 @@ export default function Login({ onSuccess, authRequired }: Props) {
         </button>
       </form>
       <p className="login-roles">
-        Роли: <strong>admin</strong> — аудит и пользователи; <strong>operator</strong> — загрузка и
-        редактирование; <strong>viewer</strong> — просмотр и экспорт.
+        Роли: <strong>admin</strong> — аудит; <strong>operator</strong> — загрузка; <strong>viewer</strong> — просмотр.
+      </p>
+      <p className="hint" style={{ marginTop: 12 }}>
+        Первый вход: логин <strong>admin</strong>, пароль <strong>admin</strong> (если не меняли в Railway).
+        <br />
+        Пароль <code>DEFAULT_ADMIN_PASSWORD</code> действует только при первом создании БД.
       </p>
     </div>
   );

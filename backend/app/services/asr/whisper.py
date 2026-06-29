@@ -51,13 +51,9 @@ def transcribe_whisper(file_path: Path) -> tuple[str, list[TranscriptSegment]]:
         logger.info("Whisper: %s, %.1fs, %d segments", file_path.name, info.duration, len(segments))
         return full_text, segments
     except Exception as exc:
-        logger.warning("Whisper unavailable (%s), demo fallback", exc)
-        return _demo_transcription()
-
-
-def _demo_transcription() -> tuple[str, list[TranscriptSegment]]:
-    demo = (
-        "Дата 29.06.2026. Участок Северный, перегон станция Северная — Южная, путь 1, "
-        "километр 245, пикет 3, объект рельс, износ 12 миллиметров, ограничение скорости 40."
-    )
-    return demo, [TranscriptSegment(0.0, 10.0, demo, confidence=0.95)]
+        logger.error("Whisper unavailable: %s", exc)
+        raise RuntimeError(
+            "Локальное распознавание Whisper недоступно. "
+            "На сервере (Railway) задайте ASR_PROVIDER=yandex, "
+            "YANDEX_SPEECH_API_KEY и YANDEX_SPEECH_FOLDER_ID."
+        ) from exc

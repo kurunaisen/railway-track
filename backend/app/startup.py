@@ -13,6 +13,21 @@ logger = logging.getLogger(__name__)
 def seed_default_admin() -> None:
     db: Session = SessionLocal()
     try:
+        if settings.admin_password_reset:
+            admin = (
+                db.query(User)
+                .filter(User.name == settings.default_admin_username)
+                .first()
+            )
+            if admin:
+                admin.password_hash = hash_password(settings.admin_password_reset)
+                db.commit()
+                logger.warning(
+                    "Admin password reset for user %s (ADMIN_PASSWORD_RESET was set)",
+                    settings.default_admin_username,
+                )
+                return
+
         existing = db.query(User).count()
         if existing > 0:
             return
