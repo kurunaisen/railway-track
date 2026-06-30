@@ -78,8 +78,7 @@ def validate_record(record: ParsedRecord, row: int) -> list[ValidationIssue]:
 
     has_param = bool(record.parameter)
     has_defect = bool(record.defect)
-    has_speed = bool(record.speed_limit)
-    if sum((has_param, has_defect, has_speed)) > 1:
+    if has_param and has_defect:
         issues.append(
             ValidationIssue(
                 row, "position_type",

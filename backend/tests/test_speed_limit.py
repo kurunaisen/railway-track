@@ -185,6 +185,34 @@ def test_speed_not_duplicated_as_defect():
     assert rows[0].speed_limit == "60"
 
 
+def test_compound_gauge_defect_single_column():
+    """«уширение рельсовой колеи 1543 мм» — одна неисправность, 1543 мм — её значение."""
+    from app.services.inspection_form import record_to_form_row
+    from app.services.parsing_pipeline import run_parsing_pipeline
+    from app.services.validator import validate_all
+
+    text = (
+        "Перегон лапландия пулозеро путь 2 главный километр 1353 пикет 2 "
+        "неисправность уширение рельсовой колеи 1543 мм ограничение скорости 60."
+    )
+    rows = normalize_all(run_parsing_pipeline(text).records)
+    defect_rows = [r for r in rows if r.defect]
+    assert len(defect_rows) == 1
+    row = defect_rows[0]
+    assert row.parameter is None
+    assert row.defect == "уширение рельсовой колеи"
+    assert row.value == "1543"
+    assert row.unit == "мм"
+    assert row.speed_limit == "60"
+
+    form = record_to_form_row(row, 1)
+    assert form["Выявленная неисправность"] == "уширение рельсовой колеи 1543 мм"
+    assert form["Ограничение скорости"] == "60 км/ч"
+
+    errors = [i for i in validate_all([row]).issues if i.severity == "error"]
+    assert not any(i.field == "position_type" for i in errors)
+
+
 def test_parser_single_record_speed():
     text = (
         "Дата 29.06.2026. Участок Северный, перегон станция Северная — Южная, путь 1, "

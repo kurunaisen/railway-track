@@ -45,21 +45,6 @@ function BrandTitle() {
   );
 }
 
-function LogoMark() {
-  return (
-    <div className="logo-mark" aria-hidden>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M12 18.75a6 6 0 0 0 6-6v-4.5a6 6 0 1 0-12 0v4.5a6 6 0 0 0 6 6Z"
-        />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 3.866-3.582 7-8 7s-8-3.134-8-7" />
-      </svg>
-    </div>
-  );
-}
-
 function AppFooter() {
   return (
     <footer className="footer">
@@ -274,11 +259,8 @@ export default function App() {
         <header className="header">
           <div className="container header-inner">
             <div className="logo">
-              <LogoMark />
-              <div>
-                <BrandTitle />
-                <p>Защищённый доступ</p>
-              </div>
+              <BrandTitle />
+              <p>Защищённый доступ</p>
             </div>
           </div>
         </header>
@@ -315,11 +297,7 @@ export default function App() {
       <header className="header">
         <div className="container header-inner">
           <div className="logo">
-            <LogoMark />
-            <div>
-              <BrandTitle />
-              <p>{APP_TAGLINE}</p>
-            </div>
+            <BrandTitle />
           </div>
           <div className="session-badge">
             {user && (

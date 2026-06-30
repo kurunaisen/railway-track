@@ -72,8 +72,6 @@ SEGMENT_SPLIT_RE = re.compile(
     r"\b(?:далее|следующ(?:ий|ая|ее)\s+(?:запись|перегон)?|следующая\s+запись|следующий\s+перегон)\b"
     r"|\b(?:затем|потом|также)\b"
     r"|\bперегон\b"
-    r"|\bнеисправност(?:ь|и)\b"
-    r"|\bдефект\b"
     r")",
     re.IGNORECASE,
 )
@@ -232,7 +230,69 @@ def _find_all_mentions(text: str, keywords: list[str]) -> list[tuple[str, int]]:
     return unique
 
 
+# Составные неисправности: значение (1543 мм) — часть дефекта, не отдельный параметр.
+COMPOUND_DEFECT_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"уширение\s+(?:рельсовой\s+)?колеи", re.IGNORECASE),
+    re.compile(r"сужение\s+(?:рельсовой\s+)?колеи", re.IGNORECASE),
+)
+
+# «неисправность» / «дефект» — вводные слова, не самостоятельная позиция.
+DEFECT_LABEL_PREFIXES = frozenset({"неисправность", "дефект"})
+
+# Параметры, которые не выделяются отдельно, если уже есть составной дефект.
+DEFECT_QUALIFIER_PARAMETERS = frozenset({"колея", "ширина колеи"})
+
+
+def _extract_compound_defect(text: str) -> str | None:
+    for pat in COMPOUND_DEFECT_PATTERNS:
+        m = pat.search(text)
+        if m:
+            return m.group(0).strip()
+    return None
+
+
+def _parameter_is_defect_qualifier(parameter: str | None, defect: str | None, text: str) -> bool:
+    if not parameter or not defect:
+        return False
+    if parameter not in DEFECT_QUALIFIER_PARAMETERS:
+        return False
+    if _extract_compound_defect(text):
+        return True
+    defect_head = defect.split()[0]
+    try:
+        return text.find(defect_head) < text.find(parameter)
+    except ValueError:
+        return False
+
+
+def _reconcile_parameter_and_defect(record: ParsedRecord, normalized: str) -> None:
+    """10.3: уширение рельсовой колеи 1543 мм — одна неисправность, не parameter+defect."""
+    compound = _extract_compound_defect(normalized)
+    if compound:
+        record.defect = compound
+        record.parameter = None
+        record.position_type = "defect"
+        return
+
+    if record.parameter and record.defect:
+        if _parameter_is_defect_qualifier(record.parameter, record.defect, normalized):
+            record.parameter = None
+            record.position_type = "defect"
+            return
+        param_pos = normalized.find(record.parameter)
+        defect_pos = normalized.find(record.defect.split()[0])
+        if param_pos >= 0 and defect_pos >= 0:
+            if param_pos < defect_pos:
+                record.defect = None
+                record.position_type = "parameter"
+            else:
+                record.parameter = None
+                record.position_type = "defect"
+
+
 def _extract_parameter(text: str) -> str | None:
+    if _extract_compound_defect(text):
+        return None
     for kw in PARAMETER_KEYWORDS:
         if kw in text:
             return kw
@@ -241,6 +301,9 @@ def _extract_parameter(text: str) -> str | None:
 
 
 def _extract_defect(text: str) -> str | None:
+    compound = _extract_compound_defect(text)
+    if compound:
+        return compound
     m = re.search(
         r"(отсутств(?:ует|уют)\s+(?:\d+\s+)?(?:стыков(?:ой|ого|ые)?\s+)?(?:болт\w*|гайк\w*|шпал\w*|клемм\w*)?)",
         text,
@@ -249,10 +312,18 @@ def _extract_defect(text: str) -> str | None:
     if m:
         return m.group(1).strip()
     for kw in DEFECT_KEYWORDS:
+        if kw in DEFECT_LABEL_PREFIXES:
+            continue
         if kw in text:
             return kw
     m = re.search(r"(?:неисправность|дефект)\s*[:\-]?\s*([а-яa-z\s]+?)(?:\s+\d|\s*,|$)", text, re.IGNORECASE)
-    return m.group(1).strip() if m else None
+    if m:
+        tail = m.group(1).strip()
+        return _extract_compound_defect(tail) or tail or None
+    for kw in DEFECT_LABEL_PREFIXES:
+        if kw in text:
+            return kw
+    return None
 
 
 def _extract_comment(text: str, record: ParsedRecord) -> str | None:
@@ -299,6 +370,7 @@ def parse_chunk(text: str, start: float | None = None, end: float | None = None)
     record.speed_limit = _extract_speed_limit(normalized)
     record.parameter = _extract_parameter(normalized)
     record.defect = _extract_defect(normalized)
+    _reconcile_parameter_and_defect(record, normalized)
 
     keyword = record.parameter or record.defect
     if keyword and keyword in normalized:
@@ -451,7 +523,7 @@ def _split_by_segments(segments: list[TranscriptSegment]) -> list[tuple[str, flo
             re.search(
                 r"\b(?:перегон|далее|следующ(?:ий|ая|ее)|"
                 r"следующая\s+запись|следующий\s+перегон|"
-                r"затем|неисправност|дефект)\b",
+                r"затем)\b",
                 text,
             )
         )

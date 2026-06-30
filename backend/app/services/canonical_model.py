@@ -13,8 +13,10 @@ from dataclasses import dataclass, field
 
 from app.services.domain_terms import DEFECT_KEYWORDS, PARAMETER_KEYWORDS
 from app.services.parser import (
+    DEFECT_LABEL_PREFIXES,
     ParsedRecord,
     _extract_comment,
+    _extract_compound_defect,
     _extract_date,
     _extract_defect,
     _extract_km,
@@ -209,6 +211,18 @@ def _speed_limit_positions(text: str) -> list[tuple[int, int]]:
     return merged
 
 
+def _anchor_is_defect_label_before_real_defect(normalized: str, pos: int, kw: str) -> bool:
+    """«неисправность уширение…» — одна позиция, метка не якорь."""
+    if kw not in DEFECT_LABEL_PREFIXES:
+        return False
+    tail = normalized[pos + len(kw):].lstrip(" :-")
+    if _extract_compound_defect(tail):
+        return True
+    return any(
+        dk in tail for dk in DEFECT_KEYWORDS if dk not in DEFECT_LABEL_PREFIXES
+    )
+
+
 def split_into_position_fragments(text: str) -> list[str]:
     """Разбивает текст логической записи на фрагменты — по одному на позицию."""
     normalized = _normalize_text(text)
@@ -221,7 +235,7 @@ def split_into_position_fragments(text: str) -> list[str]:
             if pos < 0:
                 break
             occupied = any(a <= pos < b for a, b in _speed_limit_positions(text))
-            if not occupied:
+            if not occupied and not _anchor_is_defect_label_before_real_defect(normalized, pos, kw):
                 anchors.append((pos, kw))
             start = pos + len(kw)
 
@@ -296,7 +310,10 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
     defect = _extract_defect(normalized)
 
     if param and defect:
-        if normalized.find(param) <= normalized.find(defect):
+        if _extract_compound_defect(normalized):
+            param = None
+            defect = _extract_compound_defect(normalized)
+        elif normalized.find(param) <= normalized.find(defect):
             defect = None
         else:
             param = None
