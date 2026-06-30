@@ -208,6 +208,7 @@ class AudioSessionOut(BaseModel):
     validation_warnings: list[dict] = Field(default_factory=list)
     file_metadata: dict = Field(default_factory=dict)
     records_wide: WideTableOut | None = None
+    records_form: WideTableOut | None = None
     active_job: JobOut | None = None
     logical_blocks_count: int = 0
     records_count: int = 0

@@ -21,6 +21,20 @@ MAX_LPCM_BYTES = 960_000
 MAX_CHUNK_SEC = 30.0
 
 
+def _auth_headers() -> dict[str, str]:
+    """IAM-токен (авторизованный ключ) надёжнее API-key для сервисного аккаунта."""
+    if settings.yandex_sa_authorized_key.strip():
+        from app.services.asr.yandex_iam import get_iam_token
+
+        return {"Authorization": f"Bearer {get_iam_token()}"}
+    api_key = settings.yandex_speech_api_key.strip()
+    if not api_key:
+        raise RuntimeError(
+            "Задайте YANDEX_SA_AUTHORIZED_KEY (рекомендуется) или YANDEX_SPEECH_API_KEY"
+        )
+    return {"Authorization": f"Api-Key {api_key}"}
+
+
 def _wav_to_lpcm(wav_path: Path) -> bytes:
     with wave.open(str(wav_path), "rb") as wf:
         if wf.getnchannels() != 1 or wf.getsampwidth() != SAMPLE_WIDTH:
@@ -31,15 +45,13 @@ def _wav_to_lpcm(wav_path: Path) -> bytes:
 
 
 def _recognize_lpcm(lpcm: bytes) -> str:
-    headers = {"Authorization": f"Api-Key {settings.yandex_speech_api_key}"}
+    headers = _auth_headers()
     params: dict[str, str | int] = {
         "lang": "ru-RU",
         "format": "lpcm",
         "sampleRateHertz": SAMPLE_RATE,
         "topic": "general",
     }
-    if settings.yandex_speech_folder_id:
-        headers["x-folder-id"] = settings.yandex_speech_folder_id
 
     try:
         with httpx.Client(timeout=120.0) as client:
@@ -47,7 +59,14 @@ def _recognize_lpcm(lpcm: bytes) -> str:
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as exc:
-        body = exc.response.text[:300] if exc.response is not None else ""
+        body = exc.response.text[:400] if exc.response is not None else ""
+        if exc.response is not None and exc.response.status_code == 401:
+            raise RuntimeError(
+                "Yandex SpeechKit: доступ запрещён (401). "
+                "Рекомендуется YANDEX_SA_AUTHORIZED_KEY (авторизованный ключ SA). "
+                "У speechkit-railway должна быть роль ai.speechkit-stt.user на каталоге. "
+                f"Ответ: {body or exc}"
+            ) from exc
         raise RuntimeError(
             f"Yandex SpeechKit HTTP {exc.response.status_code}: {body or exc}"
         ) from exc
@@ -77,8 +96,8 @@ def _split_lpcm(lpcm: bytes) -> list[bytes]:
 
 
 def transcribe_yandex(file_path: Path) -> tuple[str, list[TranscriptSegment]]:
-    if not settings.yandex_speech_api_key:
-        raise RuntimeError("YANDEX_SPEECH_API_KEY не задан")
+    if not settings.yandex_sa_authorized_key.strip() and not settings.yandex_speech_api_key.strip():
+        raise RuntimeError("YANDEX_SA_AUTHORIZED_KEY или YANDEX_SPEECH_API_KEY не задан")
 
     lpcm = _wav_to_lpcm(file_path)
     chunks = _split_lpcm(lpcm)

@@ -74,7 +74,7 @@ YANDEX_SPEECH_FOLDER_ID=
 # Parser: regex | openai | hybrid
 PARSER_MODE=hybrid
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-4.1-mini
 ANTHROPIC_API_KEY=sk-ant-...
 LLM_REVIEW_DISPUTED=true
 

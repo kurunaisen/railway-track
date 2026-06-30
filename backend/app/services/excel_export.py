@@ -30,6 +30,7 @@ def export_session_to_excel(db: Session, session_id: int) -> BytesIO:
 
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        _sheet_records_form(records).to_excel(writer, sheet_name="Таблица", index=False)
         _sheet_raw_transcripts(session_id, audio, job).to_excel(writer, sheet_name="raw_transcripts", index=False)
         _sheet_records_long(records).to_excel(writer, sheet_name="records_long", index=False)
         _sheet_records_wide(records).to_excel(writer, sheet_name="records_wide", index=False)
@@ -109,8 +110,19 @@ def _sheet_records_long(records) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _sheet_records_form(records) -> pd.DataFrame:
+    _, form_rows = build_form_rows(records)
+    if not form_rows:
+        return pd.DataFrame(columns=list(build_form_rows([])[0]))
+    df = pd.DataFrame(form_rows)
+    for col in df.columns:
+        df[col] = df[col].apply(lambda v: "—" if v is None or (isinstance(v, str) and not v.strip()) else v)
+    return df
+
+
 def _sheet_records_wide(records) -> pd.DataFrame:
-    from app.services.wide_table import build_wide_rows
+    from app.services.inspection_form import build_form_rows
+from app.services.wide_table import build_wide_rows
 
     _, wide_rows = build_wide_rows(records)
     return pd.DataFrame(wide_rows)

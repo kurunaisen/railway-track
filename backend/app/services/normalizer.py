@@ -5,6 +5,9 @@ from __future__ import annotations
 import re
 
 from app.services.parser import ParsedRecord
+from app.services.peregons import normalize_peregon
+from app.services.locations import is_peregon_haul
+from app.services.stations import normalize_station_name
 
 ORDINAL_PUT = {
     "перв": "1",
@@ -85,6 +88,13 @@ def normalize_speed(value: str | None) -> str | None:
 
 
 def normalize_record(record: ParsedRecord) -> ParsedRecord:
+    if record.peregon and is_peregon_haul(record.peregon):
+        record.peregon = normalize_peregon(record.peregon)
+    elif record.peregon:
+        record.uchastok = normalize_station_name(record.peregon) or record.uchastok
+        record.peregon = None
+    if record.uchastok:
+        record.uchastok = normalize_station_name(record.uchastok)
     record.put = normalize_put(record.put)
     record.km = normalize_km(record.km)
     record.piket = normalize_piket(record.piket)

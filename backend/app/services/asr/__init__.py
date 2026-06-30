@@ -13,10 +13,10 @@ def transcribe(audio_path: Path) -> tuple[str, list[TranscriptSegment]]:
     """Фабрика ASR: faster-whisper (локально) или Yandex SpeechKit."""
     provider = settings.asr_provider
     if provider == "yandex":
-        if not settings.yandex_speech_api_key:
+        if not settings.yandex_speech_api_key and not settings.yandex_sa_authorized_key:
             raise RuntimeError(
-                "YANDEX_SPEECH_API_KEY не задан. "
-                "Добавьте ключ Yandex SpeechKit в переменные окружения Railway."
+                "Задайте YANDEX_SA_AUTHORIZED_KEY (рекомендуется) или YANDEX_SPEECH_API_KEY "
+                "в переменных окружения Railway."
             )
         from app.services.asr.yandex import transcribe_yandex
 

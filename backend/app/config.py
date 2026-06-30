@@ -39,12 +39,14 @@ class Settings(BaseSettings):
     whisper_compute_type: str = "int8"
     yandex_speech_api_key: str = ""
     yandex_speech_folder_id: str = ""
+    # JSON авторизованного ключа SA (рекомендуется вместо API-key для SpeechKit)
+    yandex_sa_authorized_key: str = ""
 
     # ── LLM (FR 15.2–15.3): текст → строгий JSON, не Excel ──
     parser_mode: ParserMode = "hybrid"
     llm_primary_parser: LlmPrimaryParser = "openai"  # openai=ChatGPT | anthropic=Claude (A/B)
     openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-4.1-mini"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-5-haiku-20241022"
     llm_review_disputed: bool = True  # Claude ревью при openai primary (и наоборот в A/B)
@@ -77,6 +79,19 @@ class Settings(BaseSettings):
     @field_validator("vercel_url", mode="before")
     @classmethod
     def strip_vercel_url(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
+    @field_validator(
+        "yandex_speech_api_key",
+        "yandex_speech_folder_id",
+        "openai_api_key",
+        "anthropic_api_key",
+        mode="before",
+    )
+    @classmethod
+    def strip_secret(cls, v):
         if isinstance(v, str):
             return v.strip()
         return v

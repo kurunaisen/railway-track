@@ -10,6 +10,7 @@ from app.services.domain_terms import (
     OBJECT_KEYWORDS,
     PARAMETER_KEYWORDS,
 )
+from app.services.locations import extract_single_location, is_peregon_haul
 
 
 @dataclass
@@ -280,6 +281,17 @@ def parse_chunk(text: str, start: float | None = None, end: float | None = None)
     record.record_date = _extract_date(normalized)
     record.uchastok = _extract_uchastok(normalized)
     record.peregon = _extract_peregon(normalized)
+
+    single_loc = extract_single_location(normalized)
+    if record.peregon and is_peregon_haul(record.peregon):
+        pass
+    elif single_loc:
+        record.uchastok = single_loc
+        if record.peregon and not is_peregon_haul(record.peregon):
+            record.peregon = None
+    elif record.peregon and not is_peregon_haul(record.peregon):
+        record.uchastok = extract_single_location(record.peregon) or record.uchastok
+        record.peregon = None
     record.put = _extract_put(normalized)
     record.km = _extract_km(normalized)
     record.piket = _extract_piket(normalized)

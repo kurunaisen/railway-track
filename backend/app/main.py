@@ -139,7 +139,9 @@ def health():
 
         "integrations": {
 
-            "yandex_speechkit": bool(settings.yandex_speech_api_key),
+            "yandex_speechkit": bool(
+                settings.yandex_speech_api_key or settings.yandex_sa_authorized_key
+            ),
 
             "openai": bool(settings.openai_api_key),
 
@@ -152,6 +154,8 @@ def health():
             "ASR_PROVIDER": _env_present("ASR_PROVIDER"),
 
             "YANDEX_SPEECH_API_KEY": _env_present("YANDEX_SPEECH_API_KEY"),
+
+            "YANDEX_SA_AUTHORIZED_KEY": _env_present("YANDEX_SA_AUTHORIZED_KEY"),
 
             "YANDEX_SPEECH_FOLDER_ID": _env_present("YANDEX_SPEECH_FOLDER_ID"),
 

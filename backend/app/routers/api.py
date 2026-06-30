@@ -359,41 +359,29 @@ def process_session(
 
 
 
-    try:
+    job.status = "queued"
 
-        count = run_session_processing(db, session_id, job.id)
+    db.commit()
 
-    except Exception as exc:
-
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.refresh(job)
 
 
 
-    db.refresh(audio)
+    from app.services.background import spawn_session_processing
 
-    log_action(
+    from app.services.session_adapter import _job_to_out
 
-        db,
 
-        action="process_complete",
 
-        current=current,
+    spawn_session_processing(session_id, job.id)
 
-        request=request,
 
-        resource_type="session",
 
-        resource_id=session_id,
+    return ProcessQueuedResponse(
 
-        details={"records": count},
+        job=_job_to_out(job),
 
-    )
-
-    return ProcessResponse(
-
-        session=audio_file_to_session_out(db, audio),
-
-        message=f"Распознано позиций: {count}",
+        message="Обработка запущена (шаги 2–9)",
 
     )
 

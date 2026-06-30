@@ -88,6 +88,7 @@ export interface AudioSession {
   validation_warnings: { row: number; field: string; message: string; severity?: string }[];
   file_metadata: Record<string, unknown>;
   records_wide: WideTable | null;
+  records_form: WideTable | null;
   active_job: ProcessingJob | null;
   logical_blocks_count: number;
   records_count: number;
@@ -118,6 +119,7 @@ export function normalizeSession(raw: Partial<AudioSession> & Pick<AudioSession,
     validation_warnings: raw.validation_warnings ?? [],
     file_metadata: raw.file_metadata ?? {},
     records_wide: raw.records_wide ?? null,
+    records_form: raw.records_form ?? null,
     active_job: raw.active_job ?? null,
     logical_blocks_count: raw.logical_blocks_count ?? raw.logical_blocks?.length ?? 0,
     records_count: raw.records_count ?? raw.records?.length ?? 0,

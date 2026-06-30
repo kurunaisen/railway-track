@@ -11,6 +11,8 @@ import logging
 from typing import Any
 
 from app.services.parser import ParsedRecord
+from app.services.peregons import peregon_names_for_prompt
+from app.services.stations import station_names_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +62,12 @@ LLM_SYSTEM_RULES = """Роль: текст → структура. НЕ форм
 - Несколько перегонов («Далее…») → несколько records с разными sequence_number
 - Один параметр на item (правило 10.3)
 - Пустые поля → null
-- Порядок строго как в расшифровке"""
+- Порядок строго как в расшифровке
+- Известные перегоны (haul_name): """ + peregon_names_for_prompt() + """
+- Известные станции и блок-посты (section_name, без слова «станция» в значении): """ + station_names_for_prompt() + """
+- О.П. / остановочный пункт = Блокпост с километром (например «О.П. 1425 км» → «Блокпост 1425 км»)
+- section_name: «станция Мурманск» → «Мурманск»; блок-пост только с км: «Блокпост 1381 км»
+"""
 
 
 def validate_structured_payload(data: Any) -> dict:

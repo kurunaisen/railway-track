@@ -18,6 +18,7 @@ from app.schemas import (
 from app.services.inspection_repository import load_structured_records
 from app.services.transcript_crypto import decrypt_transcript_text
 from app.services.inspection_repository import FlatInspectionRow, load_active_job, load_flat_rows, load_latest_done_job
+from app.services.inspection_form import build_form_rows
 from app.services.wide_table import build_wide_rows
 
 
@@ -158,6 +159,7 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
 
     flat_for_wide = rows
     cols, wide_rows = build_wide_rows(flat_for_wide)
+    form_cols, form_rows = build_form_rows(flat_for_wide)
 
     structured = None
     if done and done.inspection_records:
@@ -182,6 +184,7 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
         validation_warnings=validation_warnings,
         file_metadata=file_metadata,
         records_wide=WideTableOut(columns=cols, rows=wide_rows) if wide_rows else None,
+        records_form=WideTableOut(columns=form_cols, rows=form_rows) if form_rows else None,
         active_job=_job_to_out(active) if active else None,
         logical_blocks_count=len(logical_blocks),
         records_count=len(rows),

@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { AudioSession, EditableField, TrackRecord } from "./api";
+import { useEffect, useRef, useState } from "react";
+import type { AudioSession } from "./api";
 import {
-  EDITABLE_FIELDS,
-  FIELD_LABELS,
   PIPELINE_STEPS,
   canEdit,
   confirmSession,
@@ -12,7 +10,6 @@ import {
   getSession,
   processSession,
   saveSession,
-  updateRecord,
   uploadAudio,
 } from "./api";
 import { type AuthUser, checkHealth, clearAuth, getUser } from "./auth";
@@ -152,36 +149,6 @@ export default function App() {
       setLoading(false);
     }
   };
-
-  const handleCellChange = useCallback(
-    async (record: TrackRecord, field: EditableField, value: string) => {
-      if (!session || !editable) return;
-      const updated = await updateRecord(record.id, { [field]: value || null });
-      setSession({
-        ...session,
-        records: session.records.map((r) => (r.id === updated.id ? updated : r)),
-        confirmed: false,
-      });
-      setSaved(false);
-    },
-    [session, editable]
-  );
-
-  const toggleDisputed = useCallback(
-    async (record: TrackRecord, field: EditableField) => {
-      if (!session || !editable) return;
-      const current = record.disputed_fields ?? [];
-      const next = current.includes(field) ? current.filter((f) => f !== field) : [...current, field];
-      const updated = await updateRecord(record.id, { disputed_fields: next });
-      setSession({
-        ...session,
-        records: session.records.map((r) => (r.id === updated.id ? updated : r)),
-        confirmed: false,
-      });
-      setSaved(false);
-    },
-    [session, editable]
-  );
 
   const startRecording = async () => {
     if (!editable) return;
@@ -422,7 +389,7 @@ export default function App() {
           <section className="panel table-panel">
             <div className="table-header">
               <h2>
-                Шаг 9: Long-таблица ({session.positions_count || session.records.length} позиций)
+                Шаг 9: Построчная таблица ({session.positions_count || session.records.length} позиций)
               </h2>
               <div className="table-actions">
                 <div className="view-toggle">
@@ -430,13 +397,13 @@ export default function App() {
                     className={`btn btn-secondary btn-sm ${tableView === "long" ? "active" : ""}`}
                     onClick={() => setTableView("long")}
                   >
-                    Long
+                    Построчная
                   </button>
                   <button
                     className={`btn btn-secondary btn-sm ${tableView === "wide" ? "active" : ""}`}
                     onClick={() => setTableView("wide")}
                   >
-                    Wide
+                    Сводная
                   </button>
                 </div>
                 {editable && (
@@ -480,75 +447,28 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-            ) : (
+            ) : session.records_form ? (
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>№</th>
-                    <th>Запись</th>
-                    <th>Поз.</th>
-                    <th>Тип</th>
-                    <th>Таймкод</th>
-                    {EDITABLE_FIELDS.map((key) => (
-                      <th key={key}>{FIELD_LABELS[key]}</th>
+                    {session.records_form.columns.map((c) => (
+                      <th key={c}>{c}</th>
                     ))}
-                    <th>Исходный текст</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {session.records
-                    .slice()
-                    .sort((a, b) => a.row_order - b.row_order)
-                    .map((rec, idx) => (
-                      <tr key={rec.id} className={rec.validation_errors?.length ? "row-warning" : ""}>
-                        <td className="num">{idx + 1}</td>
-                        <td className="num">
-                          {(rec.logical_record_index ?? rec.logical_block_index) != null
-                            ? (rec.logical_record_index ?? rec.logical_block_index)! + 1
-                            : "—"}
-                        </td>
-                        <td className="num">{rec.position_index != null ? rec.position_index + 1 : "—"}</td>
-                        <td className="type">{rec.position_type ?? "—"}</td>
-                        <td className="time">
-                          {formatTime(rec.segment_start)}
-                          {rec.segment_end != null && <> — {formatTime(rec.segment_end)}</>}
-                        </td>
-                        {EDITABLE_FIELDS.map((field) => {
-                          const isDisputed = rec.disputed_fields?.includes(field);
-                          return (
-                            <td key={field} className={isDisputed ? "disputed" : ""}>
-                              <div className="cell-wrap">
-                                {editable && (
-                                  <button
-                                    type="button"
-                                    className={`dispute-btn ${isDisputed ? "active" : ""}`}
-                                    onClick={() => toggleDisputed(rec, field)}
-                                  >
-                                    ⚠
-                                  </button>
-                                )}
-                                {editable ? (
-                                  <input
-                                    className="cell-input"
-                                    value={rec[field] ?? ""}
-                                    onChange={(e) => handleCellChange(rec, field, e.target.value)}
-                                    placeholder="—"
-                                  />
-                                ) : (
-                                  <span>{rec[field] ?? "—"}</span>
-                                )}
-                              </div>
-                            </td>
-                          );
-                        })}
-                        <td className="raw">{rec.raw_text ?? "—"}</td>
-                      </tr>
-                    ))}
+                  {session.records_form.rows.map((row, i) => (
+                    <tr key={i}>
+                      {session.records_form!.columns.map((c) => (
+                        <td key={c}>{row[c] ?? "—"}</td>
+                      ))}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-            )}
+            ) : (
           </section>
         )}
 
