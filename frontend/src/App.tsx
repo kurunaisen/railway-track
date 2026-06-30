@@ -20,17 +20,14 @@ function LogoMark() {
   return (
     <div className="logo-mark" aria-hidden>
       <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path
-          d="M4 22 L16 6 L28 22"
-          stroke="url(#goldGrad)"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path d="M8 22 H24" stroke="#00eaff" strokeWidth="1.8" strokeLinecap="round" opacity="0.85" />
-        <circle cx="16" cy="18" r="2" fill="#f0d060" />
+        <path d="M7 24 L13 8" stroke="url(#railGrad)" strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M25 24 L19 8" stroke="url(#railGrad)" strokeWidth="2.4" strokeLinecap="round" />
+        <line x1="9" y1="20" x2="23" y2="20" stroke="#7a8294" strokeWidth="1.6" strokeLinecap="round" />
+        <line x1="10" y1="16" x2="22" y2="16" stroke="#7a8294" strokeWidth="1.6" strokeLinecap="round" />
+        <line x1="11" y1="12" x2="21" y2="12" stroke="#7a8294" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="16" cy="7" r="2.2" fill="#00eaff" opacity="0.9" />
         <defs>
-          <linearGradient id="goldGrad" x1="4" y1="6" x2="28" y2="22">
+          <linearGradient id="railGrad" x1="7" y1="8" x2="25" y2="24">
             <stop stopColor="#f0d060" />
             <stop offset="1" stopColor="#d4af37" />
           </linearGradient>
@@ -233,7 +230,7 @@ export default function App() {
             <div className="logo">
               <LogoMark />
               <div>
-                <h1>Обход пути</h1>
+                <h1>Осмотр пути</h1>
                 <p>Защищённый доступ</p>
               </div>
             </div>
@@ -258,7 +255,7 @@ export default function App() {
           <div className="logo">
             <LogoMark />
             <div>
-              <h1>Обход пути</h1>
+              <h1>Осмотр пути</h1>
               <p>Распознавание речевых описаний состояния пути</p>
             </div>
           </div>

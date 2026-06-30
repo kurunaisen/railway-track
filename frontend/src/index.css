@@ -22,7 +22,7 @@
   --neon-green: #39ff8a;
   --neon-gold: #ffe44d;
 
-  --danger: #ff4d6d;
+  --danger: #dc2626;
   --success: #39ff8a;
   --warning: #ffb020;
 
@@ -371,17 +371,17 @@ body::before {
 }
 
 .btn-record {
-  background: linear-gradient(135deg, #ff4d6d, #c9184a);
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
   color: var(--white);
-  box-shadow: 0 0 16px rgba(255, 77, 109, 0.25);
+  box-shadow: 0 0 16px rgba(220, 38, 38, 0.3);
 }
 
 .btn-record:hover:not(:disabled) {
-  box-shadow: 0 0 24px rgba(255, 77, 109, 0.4);
+  box-shadow: 0 0 24px rgba(220, 38, 38, 0.45);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #ff4d6d, #9d0208);
+  background: linear-gradient(135deg, #ef4444, #991b1b);
   color: var(--white);
   animation: pulse-record 1.5s infinite;
 }
@@ -397,8 +397,8 @@ body::before {
 }
 
 @keyframes pulse-record {
-  0%, 100% { box-shadow: 0 0 12px rgba(255, 77, 109, 0.35); }
-  50% { box-shadow: 0 0 28px rgba(255, 77, 109, 0.55); }
+  0%, 100% { box-shadow: 0 0 12px rgba(220, 38, 38, 0.4); }
+  50% { box-shadow: 0 0 28px rgba(220, 38, 38, 0.6); }
 }
 
 /* ── Loading ── */
@@ -488,10 +488,10 @@ body::before {
 .error {
   margin-top: 1rem;
   padding: 0.85rem 1rem;
-  background: rgba(255, 77, 109, 0.08);
-  border: 1px solid rgba(255, 77, 109, 0.35);
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.35);
   border-radius: var(--radius-sm);
-  color: #ffb3c1;
+  color: #fca5a5;
   font-size: 0.875rem;
   border-left: 3px solid var(--danger);
 }
