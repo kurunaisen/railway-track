@@ -125,7 +125,7 @@ def run_audio_processing(db: Session, audio_file_id: int, job_id: int | None = N
         parse_result = run_parsing_pipeline(full_text, asr_segments, blocks)
 
         _log_step(job, PipelineStep.NORMALIZE)
-        records = normalize_all(parse_result.records)
+        records = normalize_all(parse_result.records, source_text=full_text)
 
         _log_step(job, PipelineStep.VALIDATE)
         validation = validate_all(records)

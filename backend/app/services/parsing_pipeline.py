@@ -36,15 +36,22 @@ def run_parsing_pipeline(
     blocks_payload = [b.to_dict() for b in blocks]
 
     # Базовый путь без LLM (regex / canonical)
-    records = enforce_single_position_per_row(expand_blocks_to_rows(blocks))
+    regex_baseline = enforce_single_position_per_row(expand_blocks_to_rows(blocks))
+    records = regex_baseline
 
     if _llm_available():
         try:
             llm_records, structured = parse_with_primary_llm(full_text, segments, blocks_payload)
             n_llm_logical, n_llm_pos = count_structured_records(structured or {"records": []})
+            llm_rows = enforce_single_position_per_row(llm_records)
 
-            if n_llm_logical >= n_blocks and n_llm_pos >= n_llm_logical:
-                records = enforce_single_position_per_row(llm_records)
+            llm_ok = (
+                n_llm_logical >= n_blocks
+                and n_llm_pos >= n_llm_logical
+                and len(llm_rows) >= len(regex_baseline)
+            )
+            if llm_ok:
+                records = llm_rows
                 logger.info(
                     "LLM (%s): %d records, %d items from %d blocks",
                     settings.llm_primary_parser,
@@ -57,11 +64,11 @@ def run_parsing_pipeline(
                     "row": -1,
                     "error": (
                         f"LLM ({settings.llm_primary_parser}): {n_llm_logical} records / {n_llm_pos} items "
-                        f"при {n_blocks} блоках — fallback на regex"
+                        f"при {n_blocks} блоках и {len(regex_baseline)} regex-строках — fallback на regex"
                     ),
                     "severity": "warning",
                 })
-                records = ensure_minimum_rows(records, blocks)
+                records = regex_baseline
         except Exception as exc:
             logger.warning("LLM parser failed: %s", exc)
             errors.append({

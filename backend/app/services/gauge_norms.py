@@ -1,23 +1,42 @@
 """
-Ширина рельсовой колеи — Распоряжение ОАО «РЖД» от 14.11.2016 № 2288р.
+Ширина рельсовой колеи — Инструкция 436/р (оценка ГРК, ред. 09.11.2020).
 
-Табл. 2.4 — номинал 1520 мм на пути (R≥350 м).
-Допуск содержания на пути: +4 / −8 мм → 1512–1524 мм без IV степени.
-Табл. 2.5 (участки ≤140 км/ч, установленная 61–120) — V огр. по фактической ширине.
-П. 3.4.3, табл. 3.6 — стрелочные переводы: ±3 мм от номинала в зоне перевода.
+§5.7 — номинал 1520 мм, абсолют 1512–1548 мм, стрелки макс. 1546 мм.
+Табл. 6.1 — степени I–IV по отклонению от номинала (зависит от V уст.).
+Прил. 2, табл. П.2.1 — V огр. по фактической ширине (участки ≤140 км/ч).
+
+Допуск содержания +4/−8 мм (1512–1524) — 2288р, табл. 2.4 (не перенесена в 436/р).
+Стрелочный перевод ±3 мм — 2288р, п. 3.4.3, табл. 3.6.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import IntEnum
 
 from app.config import settings
 
-INSTRUCTION_REF = "Распоряжение ОАО «РЖД» от 14.11.2016 № 2288р"
+from app.services.instruction_refs import (
+    INSTRUCTION_2288_FULL_URL,
+    INSTRUCTION_436_REF,
+)
+
+INSTRUCTION_REF = INSTRUCTION_436_REF
+INSTRUCTION_SOURCE_URL = INSTRUCTION_2288_FULL_URL
 
 GAUGE_ABSOLUTE_MIN_MM = 1512
 GAUGE_ABSOLUTE_MAX_MM = 1548
 GAUGE_SWITCH_MAX_MM = 1546
+
+
+class DeviationDegree(IntEnum):
+    """Степень отступления по табл. 6.1 436/р."""
+
+    WITHIN = 0
+    I = 1
+    II = 2
+    III = 3
+    IV = 4
 
 
 @dataclass(frozen=True)
@@ -31,17 +50,13 @@ class SpeedBand:
 
 
 def effective_norm_speed_kmh(regulation_speed: int | None) -> int | None:
-    """Лимит по 2288р с учётом фактической макс. скорости на участке."""
+    """Лимит по 436/р с учётом фактической макс. скорости на участке."""
     if regulation_speed is None:
         return None
     line_max = settings.max_track_speed_kmh
     if regulation_speed >= line_max:
         return None
     return regulation_speed
-
-GAUGE_ABSOLUTE_MIN_MM = 1512
-GAUGE_ABSOLUTE_MAX_MM = 1548
-GAUGE_SWITCH_MAX_MM = 1546
 
 
 @dataclass(frozen=True)
@@ -58,7 +73,7 @@ class GaugeProfile:
     narrow_bands: tuple[SpeedBand, ...] = ()
 
 
-# Путь, номинал 1520 мм: +4 / −8 мм (2288р, табл. 2.4–2.5).
+# Табл. П.2.1 (436/р), номинал 1520, V уст. 61–100/61–80 км/ч.
 GAUGE_TRACK_1520 = GaugeProfile(
     id="gauge_track_1520",
     nominal_mm=1520,
@@ -78,7 +93,7 @@ GAUGE_TRACK_1520 = GaugeProfile(
     ),
 )
 
-# Стрелочный перевод, номинал 1520 мм: ±3 мм (п. 3.4.3), макс. 1546 мм (табл. 3.6).
+# Стрелочный перевод: ±3 мм (2288р п. 3.4.3), макс. 1546 мм (436/р §5.7 п. 3, 2288р табл. 3.6).
 GAUGE_SWITCH_1520 = GaugeProfile(
     id="gauge_switch_1520",
     nominal_mm=1520,
@@ -100,6 +115,13 @@ GAUGE_SWITCH_1520 = GaugeProfile(
 )
 
 GAUGE_PROFILES: tuple[GaugeProfile, ...] = (GAUGE_TRACK_1520, GAUGE_SWITCH_1520)
+
+# Табл. 6.1 (436/р): макс. уширение/сужение от номинала, мм → степень (V уст. 61–100).
+_WIDEN_DEGREE_LIMITS_1520: tuple[tuple[int, DeviationDegree], ...] = (
+    (18, DeviationDegree.I),
+    (20, DeviationDegree.II),
+    (24, DeviationDegree.III),
+)
 
 _GAUGE_KEYWORDS = (
     "уширение",
@@ -136,6 +158,35 @@ def select_gauge_profile(text: str) -> GaugeProfile:
     return GAUGE_TRACK_1520
 
 
+def gauge_deviation_degree(
+    width_mm: float,
+    *,
+    nominal_mm: int = 1520,
+    widen: bool = True,
+) -> DeviationDegree:
+    """Степень отступления по табл. 6.1 436/р (номинал 1520, V уст. 61–100)."""
+    if nominal_mm != 1520:
+        return DeviationDegree.WITHIN
+
+    if widen:
+        deviation = width_mm - nominal_mm
+        if deviation <= 0:
+            return DeviationDegree.WITHIN
+        for limit_mm, degree in _WIDEN_DEGREE_LIMITS_1520:
+            if deviation <= limit_mm:
+                return degree
+        return DeviationDegree.IV
+
+    deviation = nominal_mm - width_mm
+    if deviation <= 0:
+        return DeviationDegree.WITHIN
+    narrow_limits = (6, 7, 8)
+    for limit_mm, degree in zip(narrow_limits, (DeviationDegree.I, DeviationDegree.II, DeviationDegree.III)):
+        if deviation <= limit_mm:
+            return degree
+    return DeviationDegree.IV
+
+
 def _pick_band(width: float, bands: tuple[SpeedBand, ...]) -> SpeedBand | None:
     for band in bands:
         upper = band.up_to if band.up_to is not None else float("inf")
@@ -151,6 +202,7 @@ class GaugeEvaluation:
     defect_title: str | None
     band: SpeedBand | None
     within_tolerance: bool
+    degree: DeviationDegree = DeviationDegree.WITHIN
 
 
 def evaluate_gauge_width(width: float, text: str) -> GaugeEvaluation:
@@ -163,6 +215,7 @@ def evaluate_gauge_width(width: float, text: str) -> GaugeEvaluation:
             defect_title=profile.widen_title,
             band=SpeedBand(profile.absolute_max_mm - 1, None, None, closed=True),
             within_tolerance=False,
+            degree=DeviationDegree.IV,
         )
     if width <= profile.absolute_min_mm:
         return GaugeEvaluation(
@@ -171,6 +224,7 @@ def evaluate_gauge_width(width: float, text: str) -> GaugeEvaluation:
             defect_title=profile.narrow_title,
             band=SpeedBand(0, profile.absolute_min_mm, None, closed=True),
             within_tolerance=False,
+            degree=DeviationDegree.IV,
         )
 
     if width > profile.max_normal_mm:
@@ -181,6 +235,7 @@ def evaluate_gauge_width(width: float, text: str) -> GaugeEvaluation:
             defect_title=profile.widen_title,
             band=band,
             within_tolerance=False,
+            degree=gauge_deviation_degree(width, nominal_mm=profile.nominal_mm, widen=True),
         )
 
     if width < profile.min_normal_mm:
@@ -191,6 +246,7 @@ def evaluate_gauge_width(width: float, text: str) -> GaugeEvaluation:
             defect_title=profile.narrow_title,
             band=band,
             within_tolerance=band is None,
+            degree=gauge_deviation_degree(width, nominal_mm=profile.nominal_mm, widen=False),
         )
 
     return GaugeEvaluation(
@@ -199,6 +255,7 @@ def evaluate_gauge_width(width: float, text: str) -> GaugeEvaluation:
         defect_title=None,
         band=None,
         within_tolerance=True,
+        degree=DeviationDegree.WITHIN,
     )
 
 

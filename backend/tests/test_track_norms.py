@@ -96,7 +96,7 @@ def test_gauge_within_tolerance_no_defect():
 
 
 def test_gauge_widen_1543_speed_60():
-    """2288р табл. 2.5: 1524 < ширина ≤ 1544 мм → 60 км/ч (участок ≤140, установленная 61–120)."""
+    """436/р прил. 2 табл. П.2.1: 1524 < ширина ≤ 1544 мм → 60 км/ч (V уст. 61–100)."""
     rec = ParsedRecord(
         defect="уширение рельсовой колеи",
         value="1543",
@@ -106,6 +106,13 @@ def test_gauge_widen_1543_speed_60():
     apply_track_norms(rec)
     assert rec.defect == "уширение рельсовой колеи"
     assert rec.speed_limit == "60"
+
+
+def test_gauge_1543_is_third_degree():
+    from app.services.gauge_norms import DeviationDegree, evaluate_gauge_width
+
+    evaluation = evaluate_gauge_width(1543, "уширение рельсовой колеи")
+    assert evaluation.degree == DeviationDegree.III
 
 
 def test_gauge_widen_1545_speed_25():

@@ -101,7 +101,7 @@ def evaluate_norm_band(value: float, rule: TrackNormRule) -> SpeedBand | None:
 
 
 def apply_track_norms(record: ParsedRecord) -> ParsedRecord:
-    """Применяет нормы 2288р: превышение → неисправность + V огр. (если не сказано устно)."""
+    """Применяет нормы: превышение → неисправность + V огр. (если не сказано устно)."""
     text = _record_text(record)
     if is_gauge_context(text):
         return _apply_gauge_norms(record, text)
@@ -131,7 +131,7 @@ def _apply_measurement_norms(record: ParsedRecord, text: str) -> ParsedRecord:
     record.position_type = "defect"
 
     if band.closed:
-        record.comment = merge_comment(record.comment, "движение закрывается (2288р)")
+        record.comment = merge_comment(record.comment, "движение закрывается (436/р)")
     elif not record.speed_limit and band.speed_kmh is not None:
         effective = effective_norm_speed_kmh(band.speed_kmh)
         if effective is not None:

@@ -22,19 +22,15 @@ def ensure_minimum_rows(
     records: list[ParsedRecord],
     blocks: list[LogicalBlock],
 ) -> list[ParsedRecord]:
-    """Гарантирует M ≥ N логических записей."""
+    """Не меньше строк, чем даёт regex-разбор по смене км/пикета/станции."""
     if not blocks:
         return records
 
-    expanded = expand_blocks_to_canonical_rows(blocks)
-    n_records = len({r.logical_record_index for r in expanded if r.logical_record_index is not None})
-    if not n_records:
-        n_records = len(blocks)
+    expanded = enforce_single_position_per_row(expand_blocks_to_canonical_rows(blocks))
+    if not expanded:
+        return records
 
-    if len(records) >= n_records:
+    if len(records) >= len(expanded):
         return enforce_single_position_per_row(records)
 
-    if len(expanded) >= n_records:
-        return expanded
-
-    return records if records else expanded
+    return expanded

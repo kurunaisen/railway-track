@@ -69,6 +69,23 @@ def extract_rail_side_note(text: str | None) -> str | None:
     return None
 
 
+def rail_side_mentioned_in(text: str | None) -> bool:
+    """Сторона нити явно названа в тексте (ASR / фрагмент записи)."""
+    return extract_rail_side_note(text) is not None
+
+
+def strip_ungrounded_rail_side_comment(comment: str | None, *source_texts: str | None) -> str | None:
+    """Убирает «левая/правая нить» из примечания, если этого нет в исходном тексте."""
+    if not comment or not extract_rail_side_note(comment):
+        return comment
+    pool = " ".join(t for t in source_texts if t)
+    if rail_side_mentioned_in(pool):
+        return comment.strip().lower() or None
+    cleaned = strip_rail_side_phrases(comment)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.;:-")
+    return cleaned.lower() if cleaned else None
+
+
 def merge_comment(existing: str | None, note: str) -> str:
     note = note.strip().lower()
     if not note:

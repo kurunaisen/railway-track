@@ -14,6 +14,7 @@ from app.services.rail_side import (
     is_rail_side_only_fragment,
     merge_comment,
     strip_rail_side_phrases,
+    strip_ungrounded_rail_side_comment,
 )
 from app.services.peregon_km import correct_km_for_peregon
 from app.services.peregons import normalize_peregon
@@ -235,11 +236,26 @@ def _merge_speed_within_logical_records(records: list[ParsedRecord]) -> list[Par
     return result
 
 
-def normalize_all(records: list[ParsedRecord]) -> list[ParsedRecord]:
+def _strip_hallucinated_rail_side(records: list[ParsedRecord], source_text: str | None) -> None:
+    """LLM иногда подставляет «левая нить» из примера промпта — убираем без ASR."""
+    for record in records:
+        record.comment = strip_ungrounded_rail_side_comment(
+            record.comment,
+            source_text,
+            record.raw_text,
+        )
+
+
+def normalize_all(
+    records: list[ParsedRecord],
+    source_text: str | None = None,
+) -> list[ParsedRecord]:
     for record in records:
         _resolve_peregon_asr_alias(record)
     records = reconcile_speed_limit_rows(records)
     records = reconcile_rail_side_rows(records)
+    if source_text:
+        _strip_hallucinated_rail_side(records, source_text)
     records = _merge_speed_within_logical_records(records)
     records = [normalize_record(r) for r in records]
     return apply_track_norms_all(records)
