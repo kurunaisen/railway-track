@@ -18,6 +18,7 @@ from app.services.rail_side import (
 from app.services.peregons import normalize_peregon
 from app.services.locations import is_peregon_haul
 from app.services.stations import normalize_station_name
+from app.services.track_norms import apply_track_norms_all
 
 ORDINAL_PUT = {
     "перв": "1",
@@ -198,4 +199,5 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
 def normalize_all(records: list[ParsedRecord]) -> list[ParsedRecord]:
     records = reconcile_speed_limit_rows(records)
     records = reconcile_rail_side_rows(records)
-    return [normalize_record(r) for r in records]
+    records = [normalize_record(r) for r in records]
+    return apply_track_norms_all(records)

@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     trust_proxy_headers: bool = False
     max_upload_mb: int = 100
 
+    # ── Нормы 2288р: макс. скорость на обслуживаемых участках (км/ч).
+    # Лимит из инструкции выше этого значения не записывается — по участку и так не быстрее.
+    max_track_speed_kmh: int = 80
+
     @field_validator("vercel_url", mode="before")
     @classmethod
     def strip_vercel_url(cls, v):
