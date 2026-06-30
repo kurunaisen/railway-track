@@ -47,6 +47,23 @@ function BrandTitle() {
   );
 }
 
+function SessionMeta({
+  session,
+  disputedCount,
+}: {
+  session: AudioSession;
+  disputedCount: number;
+}) {
+  return (
+    <div className="session-meta">
+      <span className={`status status-${session.status}`}>{statusLabel(session.status)}</span>
+      {session.confirmed && <span className="status status-confirmed">Подтверждено</span>}
+      {disputedCount > 0 && <span className="status status-disputed">Спорных: {disputedCount}</span>}
+      <span className="filename">{session.original_name}</span>
+    </div>
+  );
+}
+
 function AppFooter() {
   return (
     <footer className="footer">
@@ -335,17 +352,7 @@ export default function App() {
           <div className="logo">
             <BrandTitle />
           </div>
-          <div className="session-badge">
-            {session && (
-              <>
-                <span className={`status status-${session.status}`}>{statusLabel(session.status)}</span>
-                {session.confirmed && <span className="status status-confirmed">Подтверждено</span>}
-                {disputedCount > 0 && (
-                  <span className="status status-disputed">Спорных: {disputedCount}</span>
-                )}
-                <span className="filename">{session.original_name}</span>
-              </>
-            )}
+          <div className="header-actions">
             {user && (
               <button
                 type="button"
@@ -414,7 +421,14 @@ export default function App() {
                 {loading ? queueStatus || "Обработка…" : "Обработать"}
               </button>
             </div>
+            {session && <SessionMeta session={session} disputedCount={disputedCount} />}
             {error && <div className="error">{error}</div>}
+          </section>
+        )}
+
+        {!editable && session && (
+          <section className="panel carbon-panel upload-panel">
+            <SessionMeta session={session} disputedCount={disputedCount} />
           </section>
         )}
 

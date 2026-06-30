@@ -115,6 +115,24 @@ body {
   margin-top: 0.1rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(192, 196, 204, 0.12);
+}
+
 .session-badge {
   display: flex;
   align-items: center;
@@ -819,6 +837,11 @@ tr.row-warning td {
 }
 
 @media (max-width: 768px) {
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .session-badge {
     width: 100%;
     justify-content: flex-start;

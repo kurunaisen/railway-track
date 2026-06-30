@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from app.services.domain_terms import (
     DEFECT_KEYWORDS,
-    KNOWN_TERMS,
+    is_known_domain_word,
     OBJECT_KEYWORDS,
     PARAMETER_KEYWORDS,
 )
@@ -571,9 +571,7 @@ def detect_unknown_terms(full_text: str) -> list[dict]:
     words = re.findall(r"[а-яa-z]{4,}", _normalize_text(full_text))
     unknown: dict[str, int] = {}
     for w in words:
-        if w in KNOWN_TERMS:
-            continue
-        if w.isdigit():
+        if is_known_domain_word(w):
             continue
         unknown[w] = unknown.get(w, 0) + 1
     return [{"term": k, "count": v} for k, v in sorted(unknown.items(), key=lambda x: -x[1])[:50]]
