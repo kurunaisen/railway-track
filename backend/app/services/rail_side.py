@@ -49,6 +49,33 @@ def extract_rail_side(text: str | None) -> str | None:
     return None
 
 
+def extract_rail_side_note(text: str | None) -> str | None:
+    """Фраза для столбца «Примечание»."""
+    if not text:
+        return None
+    match = _RAIL_SIDE_PHRASE_RE.search(text)
+    if match:
+        phrase = re.sub(r"\s+", " ", match.group(0)).strip(" ,.;:-")
+        if phrase:
+            return phrase[0].upper() + phrase[1:]
+    side = extract_rail_side(text)
+    if side == "левая нить":
+        return "На левой стороне рельсовой нити"
+    if side == "правая нить":
+        return "На правой стороне рельсовой нити"
+    return None
+
+
+def merge_comment(existing: str | None, note: str) -> str:
+    if not note:
+        return (existing or "").strip()
+    if not existing:
+        return note
+    if note.lower() in existing.lower():
+        return existing.strip()
+    return f"{existing.strip()}. {note}"
+
+
 def strip_rail_side_phrases(text: str) -> str:
     cleaned = _RAIL_SIDE_PHRASE_RE.sub(" ", text)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.;:-")

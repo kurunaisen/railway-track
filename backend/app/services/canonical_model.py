@@ -31,8 +31,9 @@ from app.services.parser import (
     _split_multi_defects,
 )
 from app.services.rail_side import (
-    extract_rail_side,
+    extract_rail_side_note,
     is_rail_side_only_fragment,
+    merge_comment,
     strip_rail_side_phrases,
 )
 from app.services.segmentation import LogicalBlock
@@ -110,7 +111,7 @@ def _inherit_location_fields(
     ctx: LogicalRecordContext, inherited: LogicalRecordContext, loc_text: str
 ) -> None:
     """При новом перегоне не наследуем путь/км/пикет — только из текущего фрагмента."""
-    always = ("record_date", "uchastok", "obekt")
+    always = ("record_date", "uchastok")
     location = () if _is_new_haul_block(loc_text) else ("peregon", "put", "km", "piket")
     for field in (*always, *location):
         if not getattr(ctx, field) and getattr(inherited, field):
@@ -226,8 +227,7 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
     """Извлекает ровно одну позицию из фрагмента (правило 10.3)."""
     normalized = _normalize_text(fragment)
     raw = fragment.strip()
-    rail_side = extract_rail_side(normalized)
-    obekt = rail_side or _extract_obekt(normalized)
+    obekt = _extract_obekt(normalized)
 
     for marker in SPEED_LIMIT_MARKERS:
         if marker in normalized:
@@ -315,6 +315,7 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
 
 def position_to_row(ctx: LogicalRecordContext, pos: PositionItem) -> ParsedRecord:
     """Long-строка = контекст логической записи + одна позиция."""
+    side_note = extract_rail_side_note(pos.raw_text)
     row = ParsedRecord(
         record_date=ctx.record_date,
         uchastok=ctx.uchastok,
@@ -322,7 +323,7 @@ def position_to_row(ctx: LogicalRecordContext, pos: PositionItem) -> ParsedRecor
         put=ctx.put,
         km=ctx.km,
         piket=ctx.piket,
-        comment=ctx.comment,
+        comment=merge_comment(ctx.comment, side_note) if side_note else ctx.comment,
         segment_start=ctx.segment_start,
         segment_end=ctx.segment_end,
         logical_record_index=ctx.logical_record_index,
@@ -333,7 +334,7 @@ def position_to_row(ctx: LogicalRecordContext, pos: PositionItem) -> ParsedRecor
         defect=pos.defect,
         value=pos.value,
         unit=pos.unit,
-        obekt=ctx.obekt or pos.obekt,
+        obekt=pos.obekt,
         speed_limit=pos.speed_limit if pos.position_type == "speed_limit" else None,
         raw_text=pos.raw_text,
         disputed_fields=list(pos.disputed_fields),
@@ -356,8 +357,8 @@ def expand_blocks_to_canonical_rows(blocks: list[LogicalBlock]) -> list[ParsedRe
         location_parts = _split_by_location(block.text)
 
         for loc_text in location_parts:
-            side = extract_rail_side(loc_text)
-            position_text = strip_rail_side_phrases(loc_text) if side else loc_text
+            side_note = extract_rail_side_note(loc_text)
+            position_text = strip_rail_side_phrases(loc_text) if side_note else loc_text
 
             ctx = extract_logical_record_context(
                 loc_text,
@@ -365,22 +366,22 @@ def expand_blocks_to_canonical_rows(blocks: list[LogicalBlock]) -> list[ParsedRe
                 block.start,
                 block.end,
             )
-            if side:
-                ctx.obekt = side
+            if side_note:
+                ctx.comment = merge_comment(ctx.comment, side_note)
             _inherit_location_fields(ctx, inherited, loc_text)
 
             fragments = split_into_position_fragments(position_text)
             fragments = [f for f in fragments if not is_rail_side_only_fragment(f)]
-            if not fragments and not side:
+            if not fragments and not side_note:
                 fragments = [loc_text]
-            elif not fragments and side:
+            elif not fragments and side_note:
                 fragments = [position_text] if position_text.strip() else []
 
             for pos_idx, frag in enumerate(fragments):
                 pos = parse_position(frag, pos_idx)
                 rows.append(position_to_row(ctx, pos))
 
-            for field in ("record_date", "uchastok", "peregon", "put", "km", "piket", "obekt", "comment"):
+            for field in ("record_date", "uchastok", "peregon", "put", "km", "piket", "comment"):
                 val = getattr(ctx, field)
                 if val:
                     setattr(inherited, field, val)

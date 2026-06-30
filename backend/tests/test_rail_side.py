@@ -2,16 +2,20 @@
 
 from dataclasses import dataclass
 
-from app.services.inspection_form import build_form_rows, format_binding, format_defect
+from app.services.inspection_form import build_form_rows, format_binding, format_defect, format_note
 from app.services.normalizer import normalize_all, reconcile_rail_side_rows
-from app.services.parser import ParsedRecord, parse_transcript
-from app.services.rail_side import extract_rail_side, is_rail_side_only_fragment
-from app.services.segmentation import LogicalBlock, segment_logical_blocks
+from app.services.parser import ParsedRecord
+from app.services.rail_side import extract_rail_side, extract_rail_side_note, is_rail_side_only_fragment
+from app.services.segmentation import segment_logical_blocks
 
 
 def test_extract_left_rail_side():
     assert extract_rail_side("на левой стороне рельсовой нити") == "левая нить"
     assert extract_rail_side("сторона рельсовой нити левая") == "левая нить"
+
+
+def test_extract_rail_side_note():
+    assert extract_rail_side_note("на левой стороне рельсовой нити") == "На левой стороне рельсовой нити"
 
 
 def test_rail_side_is_not_defect_fragment():
@@ -49,7 +53,8 @@ def test_reconcile_side_and_bolt_rows():
     ]
     merged = reconcile_rail_side_rows(rows)
     assert len(merged) == 1
-    assert merged[0].obekt == "левая нить"
+    assert "левой стороне рельсовой нити" in (merged[0].comment or "").lower()
+    assert merged[0].obekt is None
     assert "болт" in (merged[0].defect or "").lower()
 
 
@@ -62,8 +67,6 @@ def test_user_asr_example_single_row_in_table():
     from app.services.record_expander import expand_blocks_to_rows
 
     rows = normalize_all(expand_blocks_to_rows(blocks))
-    rows = reconcile_rail_side_rows(rows)
-    rows = normalize_all(rows)
 
     @dataclass
     class Rec:
@@ -105,22 +108,25 @@ def test_user_asr_example_single_row_in_table():
 
     assert len(form_rows) == 1
     binding = form_rows[0]["Привязка (км,пк,м)"]
+    note = form_rows[0]["Примечание"]
     defect = form_rows[0]["Выявленная неисправность"]
-    assert "левая нить" in binding
+    assert "левой стороне" in (note or "").lower()
+    assert "левая нить" not in (binding or "").lower()
     assert "сторона" not in (defect or "").lower()
     assert "болт" in (defect or "").lower()
 
 
-def test_format_binding_includes_side():
+def test_format_binding_without_side():
     @dataclass
     class Rec:
         km = "1385"
-        piket = "5"
-        obekt = "левая нить"
+        piket = "5+82"
+        obekt = None
         raw_text = None
-        comment = None
+        comment = "На левой стороне рельсовой нити"
 
-    assert "левая нить" in format_binding(Rec())
+    assert format_binding(Rec()) == "1385 км, пк 5, м 82"
+    assert "левой" in format_note(Rec()).lower()
 
 
 def test_format_defect_skips_side_only_raw():
@@ -130,6 +136,7 @@ def test_format_defect_skips_side_only_raw():
         parameter = None
         value = None
         unit = None
+        comment = None
         raw_text = "на левой стороне рельсовой нити"
 
     assert format_defect(Rec()) == ""

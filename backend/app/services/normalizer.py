@@ -8,8 +8,10 @@ from app.services.km_parse import merge_hesitated_km_value
 from app.services.parser import ParsedRecord
 from app.services.rail_side import (
     extract_rail_side,
+    extract_rail_side_note,
     is_defect_continuation,
     is_rail_side_only_fragment,
+    merge_comment,
     strip_rail_side_phrases,
 )
 from app.services.peregons import normalize_peregon
@@ -115,18 +117,25 @@ def _append_defect_text(record: ParsedRecord, extra: str) -> None:
     record.position_type = "defect"
 
 
+def _apply_rail_side_note(record: ParsedRecord) -> None:
+    note = extract_rail_side_note(record.raw_text) or extract_rail_side_note(record.defect or "")
+    if note:
+        record.comment = merge_comment(record.comment, note)
+    if record.obekt in ("левая нить", "правая нить"):
+        record.obekt = None
+
+
 def reconcile_rail_side_rows(records: list[ParsedRecord]) -> list[ParsedRecord]:
-    """Сторона нити — в obekt/привязку; не отдельная неисправность."""
+    """Сторона нити — в примечание; не отдельная неисправность."""
     if not records:
         return records
 
     result: list[ParsedRecord] = []
-    pending_side: str | None = None
+    pending_note: str | None = None
 
     for record in records:
-        side = extract_rail_side(record.raw_text) or extract_rail_side(record.defect or "")
-        if side:
-            record.obekt = side
+        note = extract_rail_side_note(record.raw_text) or extract_rail_side_note(record.defect or "")
+        if note:
             if record.defect and extract_rail_side(record.defect):
                 record.defect = None
                 record.parameter = None
@@ -135,28 +144,29 @@ def reconcile_rail_side_rows(records: list[ParsedRecord]) -> list[ParsedRecord]:
                 record.position_type = None
 
         if is_rail_side_only_fragment(record.raw_text) or (
-            side and not record.defect and not record.parameter and not record.value
+            note and not record.defect and not record.parameter and not record.value
         ):
-            pending_side = side or pending_side
+            pending_note = note or pending_note
             continue
 
-        if pending_side and not record.obekt:
-            record.obekt = pending_side
-            pending_side = None
+        if pending_note:
+            record.comment = merge_comment(record.comment, pending_note)
+            pending_note = None
 
         if result and is_defect_continuation(record.raw_text) and _same_record_context(result[-1], record):
             _append_defect_text(result[-1], record.raw_text or "")
-            if record.obekt and not result[-1].obekt:
-                result[-1].obekt = record.obekt
+            if record.comment and not result[-1].comment:
+                result[-1].comment = record.comment
             continue
 
-        if side and not record.obekt:
-            record.obekt = side
+        if note:
+            record.comment = merge_comment(record.comment, note)
 
         cleaned_raw = strip_rail_side_phrases(record.raw_text or "")
         if cleaned_raw and cleaned_raw != record.raw_text:
             record.raw_text = cleaned_raw
 
+        _apply_rail_side_note(record)
         result.append(record)
 
     return result
