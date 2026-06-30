@@ -7,9 +7,11 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
 from app.models import AudioFile, Export, ProcessingJob
+from app.services.inspection_form import build_form_rows
 from app.services.inspection_repository import load_flat_rows, load_latest_done_job
 from app.services.session_adapter import audio_file_to_session_out
 from app.services.transcript_crypto import decrypt_transcript_text
+from app.services.wide_table import build_wide_rows
 
 HEADER_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
@@ -121,9 +123,6 @@ def _sheet_records_form(records) -> pd.DataFrame:
 
 
 def _sheet_records_wide(records) -> pd.DataFrame:
-    from app.services.inspection_form import build_form_rows
-from app.services.wide_table import build_wide_rows
-
     _, wide_rows = build_wide_rows(records)
     return pd.DataFrame(wide_rows)
 
