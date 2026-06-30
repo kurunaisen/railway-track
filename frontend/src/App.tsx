@@ -16,22 +16,65 @@ import { type AuthUser, checkHealth, clearAuth, getUser } from "./auth";
 import { healthUrl } from "./config";
 import Login from "./Login";
 
+function MicIcon() {
+  return (
+    <svg className="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-3.07A7 7 0 0 0 19 11h-2z" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg className="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </svg>
+  );
+}
+
 function LogoMark() {
   return (
     <div className="logo-mark" aria-hidden>
-      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M7 24 L13 8" stroke="url(#railGrad)" strokeWidth="2.4" strokeLinecap="round" />
-        <path d="M25 24 L19 8" stroke="url(#railGrad)" strokeWidth="2.4" strokeLinecap="round" />
-        <line x1="9" y1="20" x2="23" y2="20" stroke="#7a8294" strokeWidth="1.6" strokeLinecap="round" />
-        <line x1="10" y1="16" x2="22" y2="16" stroke="#7a8294" strokeWidth="1.6" strokeLinecap="round" />
-        <line x1="11" y1="12" x2="21" y2="12" stroke="#7a8294" strokeWidth="1.6" strokeLinecap="round" />
-        <circle cx="16" cy="7" r="2.2" fill="#00eaff" opacity="0.9" />
+      <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <linearGradient id="railGrad" x1="7" y1="8" x2="25" y2="24">
-            <stop stopColor="#f0d060" />
-            <stop offset="1" stopColor="#d4af37" />
+          <linearGradient id="logoGold" x1="8" y1="8" x2="48" y2="48">
+            <stop stopColor="#f5dc7a" />
+            <stop offset="0.5" stopColor="#d4af37" />
+            <stop offset="1" stopColor="#9a7b1a" />
           </linearGradient>
+          <linearGradient id="logoRail" x1="14" y1="38" x2="42" y2="18">
+            <stop stopColor="#e8c547" />
+            <stop offset="1" stopColor="#b8922a" />
+          </linearGradient>
+          <radialGradient id="logoBg" cx="50%" cy="35%" r="65%">
+            <stop stopColor="#222228" />
+            <stop offset="1" stopColor="#0e0e12" />
+          </radialGradient>
         </defs>
+        <rect x="2" y="2" width="52" height="52" rx="14" fill="url(#logoBg)" stroke="url(#logoGold)" strokeWidth="1.5" />
+        <rect x="2" y="2" width="52" height="52" rx="14" fill="none" stroke="rgba(212,175,55,0.15)" strokeWidth="4" />
+        <path
+          d="M28 12 L28 44 M20 44 L36 44"
+          stroke="rgba(212,175,55,0.25)"
+          strokeWidth="1"
+          strokeLinecap="round"
+        />
+        <path d="M16 40 L40 28" stroke="url(#logoRail)" strokeWidth="2.8" strokeLinecap="round" />
+        <path d="M16 34 L40 22" stroke="url(#logoRail)" strokeWidth="2.8" strokeLinecap="round" />
+        {[18, 22, 26, 30, 34, 38].map((x) => (
+          <line
+            key={x}
+            x1={x + 2}
+            y1={38 - (x - 18) * 0.55}
+            x2={x + 6}
+            y2={36 - (x - 18) * 0.55}
+            stroke="rgba(180,186,198,0.35)"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+          />
+        ))}
+        <circle cx="28" cy="12" r="3" fill="url(#logoGold)" />
+        <circle cx="28" cy="12" r="1.2" fill="#0a0a0e" />
       </svg>
     </div>
   );
@@ -312,11 +355,13 @@ export default function App() {
               </button>
               {!recording ? (
                 <button type="button" className="btn btn-record" onClick={startRecording} disabled={loading}>
-                  🎙 Записать
+                  <MicIcon />
+                  Записать
                 </button>
               ) : (
-                <button type="button" className="btn btn-danger" onClick={stopRecording}>
-                  ⏹ Остановить
+                <button type="button" className="btn btn-stop" onClick={stopRecording}>
+                  <StopIcon />
+                  Остановить
                 </button>
               )}
               <button
