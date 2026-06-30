@@ -15,7 +15,7 @@ from app.services.stations import (
 _DASH_RE = re.compile(r"[-–—]")
 _HAUL_SEP_RE = re.compile(r"\s+[-–—]\s+")
 _STATION_PREFIX_RE = re.compile(
-    r"станци[яи]\s+(.+?)(?:\s*,|\s+путь|\s+главн|\s+стрелоч|\s+блок|\s+км|\s+километр|\s+пикет|$)",
+    r"(?:^|\s)(?:на\s+)?станци[яи]\s+(.+?)(?:\s*,|\s+путь|\s+главн|\s+стрелоч|\s+блок|\s+км|\s+километр|\s+пикет|$)",
     re.IGNORECASE,
 )
 _PEREGON_PREFIX_RE = re.compile(r"\bперегон\b", re.IGNORECASE)
@@ -55,7 +55,7 @@ def _strip_station_prefix(value: str) -> str:
     m = _STATION_PREFIX_RE.search(text)
     if m:
         return m.group(1).strip()
-    return re.sub(r"^станци[яи]\s+", "", text, flags=re.IGNORECASE).strip()
+    return re.sub(r"^(?:на\s+)?станци[яи]\s+", "", text, flags=re.IGNORECASE).strip()
 
 
 def extract_single_location(*texts: str | None) -> str | None:
@@ -78,6 +78,14 @@ def extract_single_location(*texts: str | None) -> str | None:
         blockpost = normalize_blockpost(stripped)
         if blockpost:
             return blockpost
+
+        if stripped:
+            head = re.split(r"[,]", stripped)[0].strip().split()[0]
+            canon = normalize_station_name(head)
+            if canon and canon != head:
+                return canon
+            if canon in CANONICAL_STATIONS:
+                return canon
 
         matched = match_location_in_text(stripped)
         if matched:

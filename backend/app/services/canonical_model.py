@@ -12,7 +12,9 @@ import re
 from dataclasses import dataclass, field
 
 from app.services.domain_terms import DEFECT_KEYWORDS, PARAMETER_KEYWORDS
+from app.services.locations import extract_single_location, is_peregon_haul
 from app.services.parser import (
+    DEFECT_EVENT_ANCHOR_RE,
     DEFECT_LABEL_PREFIXES,
     ParsedRecord,
     _extract_comment,
@@ -27,6 +29,7 @@ from app.services.parser import (
     _extract_put,
     _extract_speed_limit,
     _extract_uchastok,
+    _extract_zveno,
     _extract_value_unit,
     _find_all_mentions,
     _normalize_text,
@@ -90,6 +93,15 @@ PIKET_SPLIT_RE = re.compile(
     r"(?<=[.;])\s*(?=пикет\s*\d)",
     re.IGNORECASE,
 )
+_BINDING_KM_RE = re.compile(
+    r"(?:^|\s)(?:на\s+)?\d+\s*(?:километр|км\.?)\b",
+    re.IGNORECASE,
+)
+_BINDING_PIKET_RE = re.compile(
+    r"(?:^|\s)(?:на\s+)?пикет\s*\d+",
+    re.IGNORECASE,
+)
+_STATION_BLOCK_RE = re.compile(r"\bна\s+станци[яи]\s+", re.IGNORECASE)
 
 
 @dataclass
@@ -130,31 +142,66 @@ def _is_new_haul_block(text: str) -> bool:
     return bool(re.search(r"\b(?:перегон|далее|следующ)", normalized))
 
 
+def _is_station_block(text: str) -> bool:
+    return bool(_STATION_BLOCK_RE.search(_normalize_text(text)))
+
+
+def _binding_split_points(normalized: str) -> list[int]:
+    """Точки разбиения при смене км/пикета/станции в одной записи обхода."""
+    points: list[int] = []
+
+    km_matches = list(_BINDING_KM_RE.finditer(normalized))
+    for match in km_matches[1:]:
+        points.append(match.start())
+
+    if len(km_matches) <= 1:
+        for match in list(_BINDING_PIKET_RE.finditer(normalized))[1:]:
+            points.append(match.start())
+
+    for match in _STATION_BLOCK_RE.finditer(normalized):
+        if match.start() > 0:
+            points.append(match.start())
+
+    return sorted(set(points))
+
+
 def _inherit_location_fields(
     ctx: LogicalRecordContext, inherited: LogicalRecordContext, loc_text: str
 ) -> None:
-    """При новом перегоне не наследуем путь/км/пикет — только из текущего фрагмента."""
+    """При новом перегоне или станции не наследуем путь/км/пикет — только из текущего фрагмента."""
     always = ("record_date", "uchastok")
-    location = () if _is_new_haul_block(loc_text) else ("peregon", "put", "km", "piket")
+    if _is_new_haul_block(loc_text):
+        location: tuple[str, ...] = ()
+    elif _is_station_block(loc_text):
+        ctx.peregon = None
+        station = extract_single_location(loc_text)
+        if station:
+            ctx.uchastok = station
+        location = ()
+    else:
+        location = ("peregon", "put", "km", "piket")
     for field in (*always, *location):
         if not getattr(ctx, field) and getattr(inherited, field):
             setattr(ctx, field, getattr(inherited, field))
 
 
 def _split_by_location(text: str) -> list[str]:
-    """Смена км/пикета внутри блока → отдельные логические записи."""
+    """Смена км/пикета/станции внутри блока → отдельные логические записи."""
     normalized = _normalize_text(text)
-    km_count = len(re.findall(r"(?:километр|км\.?)\s*\d", normalized))
-    piket_count = len(re.findall(r"пикет\s*\d", normalized))
+    points = _binding_split_points(normalized)
+    if not points:
+        return [text]
 
-    parts = [text]
-    if km_count > 1:
-        parts = KM_SPLIT_RE.split(text)
-        parts = [p.strip(" ,.;") for p in parts if p.strip(" ,.;")]
-    if piket_count > 1 and len(parts) == 1:
-        parts = PIKET_SPLIT_RE.split(text)
-        parts = [p.strip(" ,.;") for p in parts if p.strip(" ,.;")]
-
+    parts: list[str] = []
+    prev = 0
+    for point in points:
+        chunk = text[prev:point].strip(" ,.;")
+        if chunk:
+            parts.append(chunk)
+        prev = point
+    tail = text[prev:].strip(" ,.;")
+    if tail:
+        parts.append(tail)
     return parts if parts else [text]
 
 
@@ -166,15 +213,24 @@ def extract_logical_record_context(
 ) -> LogicalRecordContext:
     normalized = _normalize_text(text)
     dummy = ParsedRecord()
+    zveno = _extract_zveno(normalized)
+    comment = _extract_comment(normalized, dummy)
+    if zveno:
+        comment = merge_comment(comment, zveno)
+    uchastok = _extract_uchastok(normalized)
+    peregon = _extract_peregon(normalized)
+    if _is_station_block(normalized):
+        peregon = None
+        uchastok = extract_single_location(normalized) or uchastok
     return LogicalRecordContext(
         logical_record_index=logical_record_index,
         record_date=_extract_date(normalized),
-        uchastok=_extract_uchastok(normalized),
-        peregon=_extract_peregon(normalized),
+        uchastok=uchastok,
+        peregon=peregon,
         put=_extract_put(normalized),
         km=_extract_km(normalized),
         piket=_extract_piket(normalized),
-        comment=_extract_comment(normalized, dummy),
+        comment=comment,
         segment_start=segment_start,
         segment_end=segment_end,
     )
@@ -241,6 +297,12 @@ def split_into_position_fragments(text: str) -> list[str]:
 
     for pos, end in _speed_limit_positions(text):
         anchors.append((pos, "__speed_limit__"))
+
+    for match in DEFECT_EVENT_ANCHOR_RE.finditer(normalized):
+        pos = match.start()
+        occupied = any(a <= pos < b for a, b in _speed_limit_positions(text))
+        if not occupied:
+            anchors.append((pos, match.group(0)))
 
     if not anchors:
         return [text.strip()] if text.strip() else []
@@ -338,9 +400,19 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
         after = normalized.split(defect.split()[0], 1)[-1].strip(" ,:-")
         value, unit = _extract_value_unit(after)
         full_defect = defect
-        if defect == "отсутствует" or defect.startswith("отсутств"):
+        if (
+            defect.startswith("отсутств")
+            or defect.startswith("не закручен")
+            or defect.startswith("не закруч")
+        ):
             tail = normalized[normalized.find(defect.split()[0]):].strip(" ,.;")
             full_defect = tail[:120]
+        elif compound := _extract_compound_defect(normalized):
+            full_defect = compound
+            after = normalized[normalized.find(compound) + len(compound):].strip(" ,:-")
+            gauge_value, gauge_unit = _extract_value_unit(after)
+            if gauge_value:
+                value, unit = gauge_value, gauge_unit
         item = PositionItem(
             position_index=position_index,
             position_type="defect",
@@ -443,6 +515,11 @@ def expand_blocks_to_canonical_rows(blocks: list[LogicalBlock]) -> list[ParsedRe
             if side_note:
                 ctx.comment = merge_comment(ctx.comment, side_note)
             _inherit_location_fields(ctx, inherited, loc_text)
+
+            if _is_station_block(loc_text):
+                inherited.peregon = None
+                inherited.km = None
+                inherited.piket = None
 
             fragments = split_into_position_fragments(position_text)
             fragments = [f for f in fragments if not is_rail_side_only_fragment(f)]

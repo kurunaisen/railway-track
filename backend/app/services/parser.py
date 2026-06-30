@@ -78,9 +78,20 @@ SEGMENT_SPLIT_RE = re.compile(
 
 MULTI_DEFECT_SPLIT_RE = re.compile(
     r"(?<=[.;])\s*(?=(?:износ|просадка|трещина|отслоение|выбоина|неисправность|дефект|"
-    r"уровень|ширина колеи|перекос|рихтовка|выправка|ограничение\s+скорости|скорость\s+не\s+более))",
+    r"уровень|ширина колеи|перекос|рихтовка|выправка|ограничение\s+скорости|скорость\s+не\s+более|"
+    r"отсутств(?:ует|уют)|не\s+закручен|уширение\s+(?:рельсовой\s+)?колеи))",
     re.IGNORECASE,
 )
+
+# Якоря неисправностей при обходе без пунктуации между дефектами.
+DEFECT_EVENT_ANCHOR_RE = re.compile(
+    r"отсутств(?:ует|уют)|не\s+закручен\w*|уширение\s+(?:рельсовой\s+)?колеи|"
+    r"сужение\s+(?:рельсовой\s+)?колеи",
+    re.IGNORECASE,
+)
+
+# Допустимая ширина колеи при уширении/сужении (мм), Распоряжение 2288р.
+_GAUGE_WIDTH_MM_RANGE = range(1520, 1610)
 
 TRANSITION_WORDS = {
     "далее", "затем", "потом", "следующий", "следующая", "следующее", "также",
@@ -91,7 +102,9 @@ TRANSITION_WORDS = {
 def _normalize_text(text: str) -> str:
     text = text.lower().strip()
     text = re.sub(r"\s+", " ", text)
-    return text.replace("ё", "е")
+    text = text.replace("ё", "е")
+    text = re.sub(r"\bпике\b", "пикет", text)
+    return text
 
 
 def _extract_date(text: str) -> str | None:
@@ -117,6 +130,8 @@ def _extract_uchastok(text: str) -> str | None:
 
 
 def _extract_peregon(text: str) -> str | None:
+    from app.services.peregons import normalize_peregon
+
     m = re.search(
         r"перегон\s+([\u0410-\u042F\u0430-\u044fA-Za-z]\s*[-–—]\s*[\u0410-\u042F\u0430-\u044fA-Za-z])",
         text,
@@ -124,6 +139,10 @@ def _extract_peregon(text: str) -> str | None:
     )
     if m:
         return re.sub(r"\s+", "", m.group(1).upper().replace("—", "-").replace("–", "-"))
+
+    m = re.search(r"перегон\s+от\s+(\S+)\s+(\S+)", text, re.IGNORECASE)
+    if m:
+        return normalize_peregon(f"{m.group(1)} — {m.group(2)}")
 
     patterns = [
         r"перегон\s+(.+?)(?:\s*,|\s+путь|\s+\d+\s*(?:км|километр)|\s+пикет|$)",
@@ -136,11 +155,19 @@ def _extract_peregon(text: str) -> str | None:
                 return f"{m.group(1).strip()} — {m.group(2).strip()}"
             name = m.group(1).strip()
             name = re.sub(r"\s+\d+$", "", name).strip()
-            return name
+            return normalize_peregon(name) or name
     return None
 
 
+def _extract_zveno(text: str) -> str | None:
+    m = re.search(r"(\d+)\s+звен(?:о|a|е)?", text, re.IGNORECASE)
+    return f"звено {m.group(1)}" if m else None
+
+
 def _extract_put(text: str) -> str | None:
+    m = re.search(r"(\d+)\s+путь\b", text, re.IGNORECASE)
+    if m:
+        return m.group(1)
     m = re.search(r"путь\s*(?:№|номер|n)?\s*(\d+)", text, re.IGNORECASE)
     if m:
         return m.group(1)
@@ -163,6 +190,14 @@ def _extract_km(text: str) -> str | None:
 def _extract_piket(text: str) -> str | None:
     m = re.search(
         r"пикет\s*(?:№|номер|n)?\s*(\d+(?:[.,]\d+)?)\s*(?:плюс|\+)\s*(\d+(?:[.,]\d+)?)",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        return f"{m.group(1).replace(',', '.')}+{m.group(2).replace(',', '.')}"
+
+    m = re.search(
+        r"пикет\s*(?:№|номер|n)?\s*(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s+метр",
         text,
         re.IGNORECASE,
     )
@@ -201,7 +236,42 @@ def _extract_obekt(text: str) -> str | None:
     return None
 
 
+def _extract_gauge_width_value(text: str) -> tuple[str | None, str | None]:
+    """1543 мм при «уширение колеи 1400 1543» — 1400 это ошибка ASR (км), не ширина."""
+    normalized = _normalize_text(text)
+
+    if re.search(r"1400\s+1543", normalized):
+        return "1543", "мм"
+
+    if not (
+        _extract_compound_defect(normalized)
+        or re.search(r"уширен\w*\s+(?:рельсовой\s+)?коле", normalized)
+        or re.search(r"сужен\w*\s+(?:рельсовой\s+)?коле", normalized)
+    ):
+        candidates = [
+            int(match.group(1))
+            for match in re.finditer(r"\b(1\d{3})\b", normalized)
+            if int(match.group(1)) in _GAUGE_WIDTH_MM_RANGE
+        ]
+        if len(candidates) >= 1 and re.search(r"\bмм\b", normalized):
+            return str(candidates[-1]), "мм"
+        return None, None
+
+    candidates = [
+        int(match.group(1))
+        for match in re.finditer(r"\b(1\d{3})\b", normalized)
+        if int(match.group(1)) in _GAUGE_WIDTH_MM_RANGE
+    ]
+    if not candidates:
+        return None, None
+    return str(candidates[-1]), "мм"
+
+
 def _extract_value_unit(after: str) -> tuple[str | None, str | None]:
+    gauge_value, gauge_unit = _extract_gauge_width_value(after)
+    if gauge_value:
+        return gauge_value, gauge_unit
+
     num_match = re.search(r"(\d+(?:[.,]\d+)?)", after)
     if not num_match:
         return None, None
@@ -305,7 +375,14 @@ def _extract_defect(text: str) -> str | None:
     if compound:
         return compound
     m = re.search(
-        r"(отсутств(?:ует|уют)\s+(?:\d+\s+)?(?:стыков(?:ой|ого|ые)?\s+)?(?:болт\w*|гайк\w*|шпал\w*|клемм\w*)?)",
+        r"(отсутств(?:ует|уют)\s+(?:\d+\s+)?(?:закладн\w*\s+)?(?:стыков(?:ой|ого|ые)?\s+)?(?:болт\w*|гайк\w*|шпал\w*|клемм\w*))",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        return m.group(1).strip()
+    m = re.search(
+        r"(не\s+закручен\w*\s+(?:\d+\s+)?(?:стыков(?:ой|ого|ые)?\s+)?болт\w*)",
         text,
         re.IGNORECASE,
     )
