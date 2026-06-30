@@ -31,6 +31,7 @@ def convert_to_working_wav(source: Path, dest: Path | None = None) -> Path:
     if dest is None:
         dest = source.with_suffix(".working.wav")
 
+    dest.parent.mkdir(parents=True, exist_ok=True)
     ffmpeg = _find_ffmpeg()
     cmd = [
         ffmpeg,

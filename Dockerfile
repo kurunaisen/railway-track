@@ -13,6 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
 
+RUN mkdir -p uploads
+
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000

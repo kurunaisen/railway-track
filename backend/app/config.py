@@ -122,5 +122,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-if settings.storage_backend == "local":
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+# Рабочая папка для ffmpeg (конвертация WAV) нужна при любом STORAGE_BACKEND.
+settings.upload_dir.mkdir(parents=True, exist_ok=True)
