@@ -164,6 +164,14 @@ export async function uploadAudio(file: File): Promise<AudioSession> {
   return normalizeSession(await res.json());
 }
 
+export async function uploadAudioFiles(files: File[]): Promise<AudioSession[]> {
+  const sessions: AudioSession[] = [];
+  for (const file of files) {
+    sessions.push(await uploadAudio(file));
+  }
+  return sessions;
+}
+
 export async function processSession(
   sessionId: number
 ): Promise<{ session?: AudioSession; job?: ProcessingJob; queued: boolean; message: string }> {

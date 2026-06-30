@@ -47,6 +47,14 @@ function BrandTitle() {
   );
 }
 
+function upsertBatchSession(sessions: AudioSession[], updated: AudioSession): AudioSession[] {
+  const idx = sessions.findIndex((s) => s.id === updated.id);
+  if (idx < 0) return [...sessions, updated];
+  const next = [...sessions];
+  next[idx] = updated;
+  return next;
+}
+
 function SessionMeta({
   session,
   disputedCount,
@@ -113,6 +121,7 @@ export default function App() {
   const [saved, setSaved] = useState(false);
   const [tableView, setTableView] = useState<"long" | "wide">("long");
   const [accountOpen, setAccountOpen] = useState(false);
+  const [uploadBatch, setUploadBatch] = useState<AudioSession[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -161,43 +170,90 @@ export default function App() {
     };
   }, []);
 
-  const handleFile = async (file: File) => {
-    if (!editable) return;
+  const handleFiles = async (files: File[]) => {
+    if (!editable || files.length === 0) return;
     setError(null);
     setSaved(false);
     setLoading(true);
     try {
-      setSession(await uploadAudio(file));
+      const uploaded: AudioSession[] = [];
+      for (let i = 0; i < files.length; i++) {
+        if (files.length > 1) {
+          setQueueStatus(`Загрузка ${i + 1}/${files.length}…`);
+        }
+        uploaded.push(await uploadAudio(files[i]));
+      }
+      setUploadBatch((prev) => {
+        const uploadedIds = new Set(uploaded.map((s) => s.id));
+        return [...prev.filter((s) => !uploadedIds.has(s.id)), ...uploaded];
+      });
+      setSession(uploaded[uploaded.length - 1]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
       setLoading(false);
+      setQueueStatus(null);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const runProcess = async (target: AudioSession, progress?: { index: number; total: number }) => {
+    setError(null);
+    setSaved(false);
+    setLoading(true);
+    if (progress) {
+      setQueueStatus(`Обработка ${progress.index}/${progress.total}…`);
+    } else {
+      setQueueStatus(null);
+    }
+    try {
+      const result = await processSession(target.id);
+      let processed = target;
+      if (result.queued && result.job) {
+        setQueueStatus(progress ? `Обработка ${progress.index}/${progress.total}…` : "В очереди…");
+        processed = { ...target, status: "queued" };
+        setSession(processed);
+        setUploadBatch((prev) => upsertBatchSession(prev, processed));
+        processed = await pollUntilDone(result.job.id, target.id);
+      } else if (result.session) {
+        processed = result.session;
+      }
+      setSession(processed);
+      setUploadBatch((prev) => upsertBatchSession(prev, processed));
+      return processed;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка обработки");
+      setQueueStatus(null);
+      throw e;
+    } finally {
+      setLoading(false);
+      if (!progress) setQueueStatus(null);
     }
   };
 
   const handleProcess = async () => {
     if (!session || !editable) return;
+    await runProcess(session);
+  };
+
+  const handleProcessAll = async () => {
+    if (!editable) return;
+    const pending = uploadBatch.filter((s) => s.status === "uploaded");
+    if (pending.length === 0) return;
     setError(null);
     setSaved(false);
     setLoading(true);
-    setQueueStatus(null);
     try {
-      const result = await processSession(session.id);
-      if (result.queued && result.job) {
-        setQueueStatus("В очереди…");
-        setSession({ ...session, status: "queued" });
-        const processed = await pollUntilDone(result.job.id, session.id);
-        setSession(processed);
-        setQueueStatus(null);
-      } else if (result.session) {
-        setSession(result.session);
+      for (let i = 0; i < pending.length; i++) {
+        const target = pending[i];
+        setSession(target);
+        await runProcess(target, { index: i + 1, total: pending.length });
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка обработки");
-      setQueueStatus(null);
+    } catch {
+      // runProcess уже выставил error
     } finally {
       setLoading(false);
+      setQueueStatus(null);
     }
   };
 
@@ -207,7 +263,9 @@ export default function App() {
     try {
       await saveSession(session.id);
       setSaved(true);
-      setSession({ ...session, status: "saved" });
+      const updated = { ...session, status: "saved" };
+      setSession(updated);
+      setUploadBatch((prev) => upsertBatchSession(prev, updated));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка сохранения");
     } finally {
@@ -220,7 +278,9 @@ export default function App() {
     setLoading(true);
     try {
       await confirmSession(session.id);
-      setSession({ ...session, confirmed: true, status: "confirmed" });
+      const updated = { ...session, confirmed: true, status: "confirmed" };
+      setSession(updated);
+      setUploadBatch((prev) => upsertBatchSession(prev, updated));
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка подтверждения");
@@ -241,7 +301,7 @@ export default function App() {
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        await handleFile(new File([blob], `recording_${Date.now()}.webm`, { type: "audio/webm" }));
+        await handleFiles([new File([blob], `recording_${Date.now()}.webm`, { type: "audio/webm" })]);
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
@@ -267,7 +327,9 @@ export default function App() {
     setError(null);
     setLoading(true);
     try {
-      setSession(await getSession(sessionId));
+      const loaded = await getSession(sessionId);
+      setSession(loaded);
+      setUploadBatch((prev) => upsertBatchSession(prev, loaded));
       setSaved(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось открыть запись");
@@ -345,6 +407,8 @@ export default function App() {
       (session.parse_errors?.length ?? 0) > 0 ||
       unknownTerms.length > 0);
 
+  const pendingUploadCount = uploadBatch.filter((s) => s.status === "uploaded").length;
+
   return (
     <div className="app carbon-bg">
       <header className="header">
@@ -374,18 +438,19 @@ export default function App() {
           <section className="panel carbon-panel upload-panel">
             <h2>Загрузите аудио или запишите аудио</h2>
             <p className="hint">
-              Форматы: WAV, MP3, M4A, FLAC. Запись с микрофона или файл — результат попадёт в таблицу после
+              Форматы: WAV, MP3, M4A, FLAC. Можно выбрать несколько файлов — результат попадёт в таблицу после
               обработки на сервере (mono 16 kHz WAV).
             </p>
             <div className="upload-actions">
               <input
                 ref={fileRef}
                 type="file"
+                multiple
                 accept=".wav,.mp3,.m4a,.flac,audio/wav,audio/mpeg,audio/mp4,audio/flac"
                 hidden
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleFile(f);
+                  const list = e.target.files;
+                  if (list?.length) void handleFiles(Array.from(list));
                 }}
               />
               <button
@@ -394,7 +459,7 @@ export default function App() {
                 onClick={() => fileRef.current?.click()}
                 disabled={loading}
               >
-                Выбрать файл
+                Выбрать файлы
               </button>
               {!recording ? (
                 <button type="button" className="btn btn-record" onClick={startRecording} disabled={loading}>
@@ -410,7 +475,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={handleProcess}
+                onClick={() => void handleProcess()}
                 disabled={
                   !session ||
                   loading ||
@@ -420,7 +485,34 @@ export default function App() {
               >
                 {loading ? queueStatus || "Обработка…" : "Обработать"}
               </button>
+              {pendingUploadCount > 1 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => void handleProcessAll()}
+                  disabled={loading}
+                >
+                  Обработать все ({pendingUploadCount})
+                </button>
+              )}
             </div>
+            {uploadBatch.length > 0 && (
+              <ul className="upload-batch-list">
+                {uploadBatch.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      className={`upload-batch-item ${session?.id === item.id ? "active" : ""}`}
+                      onClick={() => setSession(item)}
+                      disabled={loading}
+                    >
+                      <span className="upload-batch-name">{item.original_name}</span>
+                      <span className={`status status-${item.status}`}>{statusLabel(item.status)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {session && <SessionMeta session={session} disputedCount={disputedCount} />}
             {error && <div className="error">{error}</div>}
           </section>

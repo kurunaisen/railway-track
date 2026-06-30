@@ -262,6 +262,55 @@ body {
   flex-wrap: wrap;
 }
 
+.upload-batch-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.upload-batch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(192, 196, 204, 0.12);
+  background: rgb(0 0 0 / 0.25);
+  color: var(--foreground);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  font: inherit;
+  text-align: left;
+}
+
+.upload-batch-item:hover:not(:disabled) {
+  border-color: rgb(201 169 98 / 0.3);
+  background: rgb(201 169 98 / 0.05);
+}
+
+.upload-batch-item.active {
+  border-color: rgb(201 169 98 / 0.55);
+  background: rgb(201 169 98 / 0.1);
+  box-shadow: 0 0 0 1px rgb(201 169 98 / 0.25);
+}
+
+.upload-batch-item:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.upload-batch-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
