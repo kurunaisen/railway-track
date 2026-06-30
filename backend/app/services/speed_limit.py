@@ -194,6 +194,7 @@ def reconcile_speed_limit_rows(records: list[ParsedRecord]) -> list[ParsedRecord
         if (
             not _has_real_issue(record)
             and not record.speed_limit
+            and not record.km
             and record.position_type == "parameter"
             and "parameter" in record.disputed_fields
         ):

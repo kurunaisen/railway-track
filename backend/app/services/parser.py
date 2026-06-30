@@ -128,7 +128,7 @@ def _extract_peregon(text: str) -> str | None:
         return re.sub(r"\s+", "", m.group(1).upper().replace("—", "-").replace("–", "-"))
 
     patterns = [
-        r"перегон\s+([^\s,]+(?:\s+[^\s,]+)*?)(?:\s*,|\s+путь|\s+км|\s+километр|\s+пикет|$)",
+        r"перегон\s+(.+?)(?:\s*,|\s+путь|\s+\d+\s*(?:км|километр)|\s+пикет|$)",
         r"станци[яи]\s+([^\s,]+)\s*[-–—]\s*([^\s,]+)",
     ]
     for i, pat in enumerate(patterns):
@@ -136,7 +136,9 @@ def _extract_peregon(text: str) -> str | None:
         if m:
             if i == 1 and m.lastindex == 2:
                 return f"{m.group(1).strip()} — {m.group(2).strip()}"
-            return m.group(1).strip()
+            name = m.group(1).strip()
+            name = re.sub(r"\s+\d+$", "", name).strip()
+            return name
     return None
 
 

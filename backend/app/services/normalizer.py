@@ -15,6 +15,7 @@ from app.services.rail_side import (
     merge_comment,
     strip_rail_side_phrases,
 )
+from app.services.peregon_km import correct_km_for_peregon
 from app.services.peregons import normalize_peregon
 from app.services.locations import is_peregon_haul
 from app.services.stations import normalize_station_name
@@ -184,6 +185,12 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
         record.uchastok = normalize_station_name(record.uchastok)
     record.put = normalize_put(record.put)
     record.km = normalize_km(record.km)
+    if record.peregon and is_peregon_haul(record.peregon):
+        corrected_km, km_fixed = correct_km_for_peregon(record.km, record.peregon)
+        if km_fixed and corrected_km:
+            record.km = corrected_km
+            if "km" not in record.disputed_fields:
+                record.disputed_fields.append("km")
     record.piket = normalize_piket(record.piket)
     record.unit = normalize_unit(record.unit)
     record.speed_limit = normalize_speed(record.speed_limit)
@@ -196,8 +203,43 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
     return record
 
 
+def _resolve_peregon_asr_alias(record: ParsedRecord) -> None:
+    """ASR «магнитит и шон» → «Магнетиты — Шонгуй» до reconcile."""
+    if not record.peregon:
+        return
+    resolved = normalize_peregon(record.peregon)
+    if resolved and is_peregon_haul(resolved):
+        record.peregon = resolved
+
+
+def _merge_speed_within_logical_records(records: list[ParsedRecord]) -> list[ParsedRecord]:
+    """V огр. с отдельной позиции → на строку с неисправностью того же места."""
+    groups: dict[tuple, list[ParsedRecord]] = {}
+    for record in records:
+        key = (
+            record.logical_record_index,
+            record.km or "",
+            record.piket or "",
+            record.peregon or "",
+        )
+        groups.setdefault(key, []).append(record)
+
+    result: list[ParsedRecord] = []
+    for group in groups.values():
+        speed = next((r.speed_limit for r in group if r.speed_limit), None)
+        if speed:
+            for record in group:
+                if record.defect and not record.speed_limit:
+                    record.speed_limit = speed
+        result.extend(group)
+    return result
+
+
 def normalize_all(records: list[ParsedRecord]) -> list[ParsedRecord]:
+    for record in records:
+        _resolve_peregon_asr_alias(record)
     records = reconcile_speed_limit_rows(records)
     records = reconcile_rail_side_rows(records)
+    records = _merge_speed_within_logical_records(records)
     records = [normalize_record(r) for r in records]
     return apply_track_norms_all(records)
