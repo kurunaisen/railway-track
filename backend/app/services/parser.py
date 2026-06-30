@@ -10,6 +10,7 @@ from app.services.domain_terms import (
     OBJECT_KEYWORDS,
     PARAMETER_KEYWORDS,
 )
+from app.services.km_parse import extract_binding_km
 from app.services.locations import extract_single_location, is_peregon_haul
 
 
@@ -155,14 +156,7 @@ def _extract_put(text: str) -> str | None:
 
 
 def _extract_km(text: str) -> str | None:
-    for pat in (
-        r"(?:километр|км\.?)\s*(\d+(?:[.,]\d+)?)",
-        r"(\d+(?:[.,]\d+)?)\s*(?:километр|км\.?)\b",
-    ):
-        m = re.search(pat, text, re.IGNORECASE)
-        if m:
-            return m.group(1).replace(",", ".")
-    return None
+    return extract_binding_km(text)
 
 
 def _extract_piket(text: str) -> str | None:

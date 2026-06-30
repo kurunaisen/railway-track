@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from app.services.km_parse import merge_hesitated_km_value
 from app.services.parser import ParsedRecord
 from app.services.peregons import normalize_peregon
 from app.services.locations import is_peregon_haul
@@ -77,7 +78,7 @@ def normalize_unit(value: str | None) -> str | None:
 def normalize_km(value: str | None) -> str | None:
     if not value:
         return value
-    return value.replace(",", ".").strip()
+    return merge_hesitated_km_value(value)
 
 
 def normalize_speed(value: str | None) -> str | None:
