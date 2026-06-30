@@ -36,7 +36,8 @@ class FormRowSource(Protocol):
     raw_text: str | None
 
 
-# Явные фразы: «путь номер 4», «стрелочный перевод 2».
+# Явные фразы: «5 путь», «путь номер 4», «стрелочный перевод 2».
+_PATH_N_PUT_RE = re.compile(r"(\d+)\s+путь\b", re.IGNORECASE)
 _PATH_EXPLICIT_RE = re.compile(
     r"(?:главн\w*\s+)?путь\s*(?:№|номер|n\.?)?\s*(\d+)",
     re.IGNORECASE,
@@ -60,8 +61,17 @@ def _explicit_path_number(*texts: str | None) -> str | None:
     for text in texts:
         if not text:
             continue
-        match = _PATH_EXPLICIT_RE.search(_normalize_track_text(text))
+        norm = _normalize_track_text(text)
+        match = _PATH_N_PUT_RE.search(norm)
         if match:
+            return match.group(1)
+        for match in _PATH_EXPLICIT_RE.finditer(norm):
+            tail = norm[match.end() : match.end() + 12]
+            if re.match(r"\s+звен", tail, re.IGNORECASE):
+                continue
+            before = norm[max(0, match.start() - 12) : match.start()]
+            if re.search(r"\d+\s+путь\s*$", before, re.IGNORECASE):
+                continue
             return match.group(1)
     return None
 
@@ -86,6 +96,10 @@ def _main_path_explicit(*texts: str | None) -> bool:
 
 
 def _is_peregon_context(rec: FormRowSource, *texts: str | None) -> bool:
+    if rec.uchastok and not rec.peregon:
+        return False
+    if rec.uchastok and rec.peregon and is_peregon_haul(rec.peregon):
+        return False
     for text in texts:
         if text and _PEREGON_WORD_RE.search(_normalize_track_text(text)):
             return True

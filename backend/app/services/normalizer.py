@@ -19,8 +19,10 @@ from app.services.rail_side import (
 from app.services.peregon_km import correct_km_for_peregon
 from app.services.peregons import normalize_peregon
 from app.services.locations import is_peregon_haul
-from app.services.stations import normalize_station_name
+from app.services.stations import normalize_station_name, CANONICAL_STATIONS
+from app.services.station_km import sanitize_station_km
 from app.services.track_norms import apply_track_norms_all
+from app.services.canonical_model import _location_only_fragment
 
 ORDINAL_PUT = {
     "перв": "1",
@@ -184,8 +186,19 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
         record.peregon = None
     if record.uchastok:
         record.uchastok = normalize_station_name(record.uchastok)
+    if record.uchastok and record.peregon and is_peregon_haul(record.peregon):
+        # На станции не тащим перегон с предыдущих строк (ASR-блоки).
+        station = normalize_station_name(record.uchastok)
+        if record.put and station in CANONICAL_STATIONS:
+            record.peregon = None
     record.put = normalize_put(record.put)
     record.km = normalize_km(record.km)
+    if record.uchastok and not record.peregon:
+        cleared_km, was_cleared = sanitize_station_km(record.km, record.uchastok)
+        if was_cleared:
+            record.km = cleared_km
+            if "km" not in record.disputed_fields:
+                record.disputed_fields.append("km")
     if record.peregon and is_peregon_haul(record.peregon):
         corrected_km, km_fixed = correct_km_for_peregon(record.km, record.peregon)
         if km_fixed and corrected_km:
@@ -246,6 +259,33 @@ def _strip_hallucinated_rail_side(records: list[ParsedRecord], source_text: str 
         )
 
 
+_DEFECT_HINT_RE = re.compile(
+    r"болт|закладн|закручен|отсutств|уширен|просадк|износ|перекос",
+    re.IGNORECASE,
+)
+
+
+def _drop_location_only_rows(records: list[ParsedRecord]) -> list[ParsedRecord]:
+    return [
+        r
+        for r in records
+        if not (
+            r.position_type == "parameter"
+            and not r.defect
+            and not r.value
+            and not r.speed_limit
+            and "parameter" in r.disputed_fields
+            and not _DEFECT_HINT_RE.search(r.raw_text or "")
+        )
+        and not (
+            _location_only_fragment(r.raw_text or "")
+            and not r.defect
+            and not r.value
+            and not r.speed_limit
+        )
+    ]
+
+
 def normalize_all(
     records: list[ParsedRecord],
     source_text: str | None = None,
@@ -256,6 +296,7 @@ def normalize_all(
     records = reconcile_rail_side_rows(records)
     if source_text:
         _strip_hallucinated_rail_side(records, source_text)
+    records = _drop_location_only_rows(records)
     records = _merge_speed_within_logical_records(records)
     records = [normalize_record(r) for r in records]
     return apply_track_norms_all(records)

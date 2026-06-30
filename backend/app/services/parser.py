@@ -587,6 +587,32 @@ def split_into_logical_chunks(
     return _merge_incomplete_chunks(expanded)
 
 
+_SEGMENT_NEW_CONTEXT_RE = re.compile(
+    r"(?:^|\s)(?:"
+    r"перегон|далее|следующ(?:ий|ая|ее)|"
+    r"следующая\s+запись|следующий\s+перегон|"
+    r"затем|"
+    r"на\s+станци|"
+    r"на\s+\d+\s*(?:км|километр)|"
+    r"\d+\s*(?:км|километр)\s+пикет"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _segment_starts_new_context(text: str) -> bool:
+    return bool(_SEGMENT_NEW_CONTEXT_RE.search(_normalize_text(text)))
+
+
+def _split_after_prev_segment(prev_text: str, next_text: str) -> bool:
+    """«…5 путь» | «…на станции X» → следующий сегмент «2 звено…»."""
+    prev = _normalize_text(prev_text).strip()
+    nxt = _normalize_text(next_text).strip()
+    if re.search(r"(?:\d+\s+путь|на\s+станци\w*)\s*$", prev):
+        return bool(re.match(r"^\d+\s+звен", nxt))
+    return False
+
+
 def _split_by_segments(segments: list[TranscriptSegment]) -> list[tuple[str, float | None, float | None]]:
     if not segments:
         return []
@@ -595,16 +621,11 @@ def _split_by_segments(segments: list[TranscriptSegment]) -> list[tuple[str, flo
     current: list[TranscriptSegment] = []
 
     for seg in segments:
-        text = _normalize_text(seg.text)
-        is_new = bool(
-            re.search(
-                r"\b(?:перегон|далее|следующ(?:ий|ая|ее)|"
-                r"следующая\s+запись|следующий\s+перегон|"
-                r"затем)\b",
-                text,
-            )
+        split_here = bool(current) and (
+            _segment_starts_new_context(seg.text)
+            or _split_after_prev_segment(current[-1].text, seg.text)
         )
-        if is_new and current:
+        if split_here:
             chunks.append(current)
             current = [seg]
         else:
@@ -613,7 +634,7 @@ def _split_by_segments(segments: list[TranscriptSegment]) -> list[tuple[str, flo
     if current:
         chunks.append(current)
 
-    if len(chunks) == 1 and len(segments) > 3:
+    if len(chunks) == 1 and len(segments) > 1:
         chunks = _subdivide_long_chunk(segments)
 
     result: list[tuple[str, float | None, float | None]] = []
@@ -631,8 +652,7 @@ def _subdivide_long_chunk(segments: list[TranscriptSegment]) -> list[list[Transc
 
     for prev, seg in zip(segments, segments[1:], strict=False):
         gap = seg.start - prev.end
-        text = _normalize_text(seg.text)
-        force = bool(re.search(r"\b(?:перегон|далее|следующ|затем|дефект)\b", text))
+        force = _segment_starts_new_context(seg.text) or _split_after_prev_segment(prev.text, seg.text)
         if gap > 1.5 or force:
             groups.append(current)
             current = [seg]

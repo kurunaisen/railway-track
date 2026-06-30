@@ -15,6 +15,7 @@ from app.services.parser import ParsedRecord
 from app.services.speed_limit import apply_speed_limit_fields
 from app.services.peregons import peregon_names_for_prompt
 from app.services.stations import station_names_for_prompt
+from app.services.norms_for_llm import build_norms_summary_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ STRUCTURED_JSON_EXAMPLE = {
     ]
 }
 
-LLM_SYSTEM_RULES = """Роль: текст → структура. НЕ формируй Excel, таблицы Markdown или пояснения.
+_LLM_SYSTEM_RULES_BASE = """Роль: текст → структура. НЕ формируй Excel, таблицы Markdown или пояснения.
 Верни ТОЛЬКО один JSON-объект формата {"records": [...]}.
 
 Каждый элемент records[] — одна логическая запись (перегон/км/пикет):
@@ -77,9 +78,16 @@ LLM_SYSTEM_RULES = """Роль: текст → структура. НЕ форм
 - Несколько неисправностей на разных пикетах — несколько records, в каждом один item (правило 10.3)
 - Ограничение скорости — НЕ defect. Это следствие неисправности: speed_limit=60, unit «км/ч», position_type «speed_limit»
 - «ограничение скорости 60», «скорость 60 км/ч», «скорость не более 40» → item speed_limit с value_numeric=число, без defect_text
-- Нормы Распоряжения ОАО «РЖД» от 14.11.2016 № 2288р: превышение нормы = неисправность; V огр. по таблицам инструкции, если инспектор не назвал скорость. Пример: стыковой зазор до 24 мм — норма; св. 24 до 26 мм — 100 км/ч; св. 26 до 30 мм — 60 км/ч; св. 30 до 35 мм — 25 км/ч; более 35 мм — движение закрывается. Ширина колеи на пути: номинал 1520 мм, допуск +4/−8 мм (1512–1524); св. 1524 до 1544 мм — 60 км/ч; св. 1544 до 1548 — 25 км/ч; менее 1512 или более 1548 — закрытие. На стрелочном переводе допуск ±3 мм (1517–1523), макс. 1546 мм
 - Если в одной записи и дефект, и скорость — два items: defect + speed_limit (скорость не дублировать в defect_text)
 """
+
+
+def build_llm_system_rules() -> str:
+    """System prompt с актуальными нормами из gauge_norms / track_norms."""
+    return _LLM_SYSTEM_RULES_BASE + "\n" + build_norms_summary_for_llm()
+
+
+LLM_SYSTEM_RULES = build_llm_system_rules()
 
 
 def validate_structured_payload(data: Any) -> dict:

@@ -88,6 +88,18 @@ def _is_speed_km_context(text: str, match_start: int) -> bool:
     return bool(re.search(r"км\s*/?\s*ч|километр(?:ов)?\s*в\s*час", after))
 
 
+def _is_gauge_asr_noise_km(text: str, match_start: int, km_value: str) -> bool:
+    """«1400 1543 мм» — 1400 не километр, а ошибка ASR рядом с шириной колеи."""
+    if km_value != "1400":
+        return False
+    window = text[max(0, match_start - 40) : match_start + 40].lower()
+    if not re.search(r"коле|уширен|сужен", window):
+        return False
+    if re.search(r"1400\s+15\d{2}", window):
+        return True
+    return False
+
+
 def extract_binding_km(text: str) -> str | None:
     """Км привязки дефекта; км в названии блок-поста и «60 км/ч» не считаются."""
     normalized = merge_hesitated_km_in_text(text)
@@ -98,7 +110,10 @@ def extract_binding_km(text: str) -> str | None:
                 continue
             if _is_speed_km_context(normalized, match.start()):
                 continue
-            candidates.append((match.start(), match.group(1).replace(",", ".")))
+            km_value = match.group(1).replace(",", ".")
+            if _is_gauge_asr_noise_km(normalized, match.start(), km_value):
+                continue
+            candidates.append((match.start(), km_value))
     if not candidates:
         return None
     return candidates[-1][1]

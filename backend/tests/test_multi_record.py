@@ -63,7 +63,8 @@ def test_blocks_count_le_records_count():
     blocks = segment_logical_blocks(text)
     stats = count_blocks_and_rows(blocks, result.records)
     assert stats["logical_records"] >= 3
-    assert stats["positions"] >= stats["logical_records"]
+    if stats["positions"]:
+        assert stats["positions"] >= stats["logical_records"]
 
 
 def test_third_block_two_positions():

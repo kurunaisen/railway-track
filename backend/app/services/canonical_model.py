@@ -119,6 +119,7 @@ class LogicalRecordContext:
     comment: str | None = None
     segment_start: float | None = None
     segment_end: float | None = None
+    station_active: bool = False
 
 
 @dataclass
@@ -144,6 +145,34 @@ def _is_new_haul_block(text: str) -> bool:
 
 def _is_station_block(text: str) -> bool:
     return bool(_STATION_BLOCK_RE.search(_normalize_text(text)))
+
+
+def _location_only_fragment(text: str) -> bool:
+    """Только привязка/станция без неисправности — строку не создаём."""
+    normalized = _normalize_text(text)
+    if not (
+        _extract_peregon(normalized)
+        or _is_station_block(normalized)
+        or _extract_km(normalized)
+        or _extract_piket(normalized)
+        or re.search(r"перег.n\b", normalized)
+    ):
+        return False
+    if _extract_compound_defect(normalized):
+        return False
+    if extract_speed_limit(normalized):
+        return False
+    if re.search(r"перег.n\b", normalized) and not _extract_km(normalized) and not _extract_piket(normalized):
+        if not _extract_defect(normalized) and not _extract_parameter(normalized):
+            return True
+    if re.search(r"уширен|сужен|зазор|болт|закладн|закручен|отсутств", normalized):
+        return False
+    param = _extract_parameter(normalized)
+    if param and param != "путь":
+        return False
+    if _extract_defect(normalized):
+        return False
+    return True
 
 
 def _binding_split_points(normalized: str) -> list[int]:
@@ -178,6 +207,18 @@ def _inherit_location_fields(
         if station:
             ctx.uchastok = station
         location = ()
+    elif inherited.station_active and not _is_new_haul_block(loc_text):
+        ctx.peregon = None
+        ctx.km = None
+        ctx.piket = None
+        if not ctx.uchastok:
+            ctx.uchastok = inherited.uchastok
+        if not ctx.put and inherited.put:
+            ctx.put = inherited.put
+        for field in always:
+            if not getattr(ctx, field) and getattr(inherited, field):
+                setattr(ctx, field, getattr(inherited, field))
+        return
     else:
         location = ("peregon", "put", "km", "piket")
     for field in (*always, *location):
@@ -195,11 +236,11 @@ def _split_by_location(text: str) -> list[str]:
     parts: list[str] = []
     prev = 0
     for point in points:
-        chunk = text[prev:point].strip(" ,.;")
+        chunk = normalized[prev:point].strip(" ,.;")
         if chunk:
             parts.append(chunk)
         prev = point
-    tail = text[prev:].strip(" ,.;")
+    tail = normalized[prev:].strip(" ,.;")
     if tail:
         parts.append(tail)
     return parts if parts else [text]
@@ -517,18 +558,32 @@ def expand_blocks_to_canonical_rows(blocks: list[LogicalBlock]) -> list[ParsedRe
             _inherit_location_fields(ctx, inherited, loc_text)
 
             if _is_station_block(loc_text):
+                ctx.peregon = None
+                ctx.km = None
+                ctx.piket = None
+                ctx.station_active = True
                 inherited.peregon = None
                 inherited.km = None
                 inherited.piket = None
+                inherited.station_active = True
 
             fragments = split_into_position_fragments(position_text)
-            fragments = [f for f in fragments if not is_rail_side_only_fragment(f)]
+            fragments = [
+                f
+                for f in fragments
+                if not is_rail_side_only_fragment(f) and not _location_only_fragment(f)
+            ]
             if not fragments and not side_note:
-                fragments = [loc_text]
+                if _location_only_fragment(loc_text):
+                    fragments = []
+                else:
+                    fragments = [loc_text]
             elif not fragments and side_note:
                 fragments = [position_text] if position_text.strip() else []
 
             for pos_idx, frag in enumerate(fragments):
+                if _location_only_fragment(frag):
+                    continue
                 pos = parse_position(frag, pos_idx)
                 rows.append(position_to_row(ctx, pos))
 
@@ -536,6 +591,7 @@ def expand_blocks_to_canonical_rows(blocks: list[LogicalBlock]) -> list[ParsedRe
                 val = getattr(ctx, field)
                 if val:
                     setattr(inherited, field, val)
+            inherited.station_active = ctx.station_active or inherited.station_active
 
             logical_record_index += 1
 

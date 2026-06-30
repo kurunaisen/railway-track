@@ -9,7 +9,7 @@ from anthropic import Anthropic
 
 from app.config import settings
 from app.services.llm.json_schema import (
-    LLM_SYSTEM_RULES,
+    build_llm_system_rules,
     parse_llm_json,
     structured_to_parsed_rows,
 )
@@ -32,7 +32,7 @@ def parse_structured_with_claude(
     message = client.messages.create(
         model=settings.anthropic_model,
         max_tokens=4096,
-        system=LLM_SYSTEM_RULES,
+        system=build_llm_system_rules(),
         messages=[
             {
                 "role": "user",

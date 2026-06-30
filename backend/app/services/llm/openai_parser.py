@@ -10,11 +10,12 @@ from openai import OpenAI
 from app.config import settings
 from app.services.domain_terms import KNOWN_TERMS
 from app.services.llm.json_schema import (
-    LLM_SYSTEM_RULES,
     STRUCTURED_JSON_EXAMPLE,
+    build_llm_system_rules,
     parse_llm_json,
     structured_to_parsed_rows,
 )
+from app.services.norms_for_llm import build_norms_reference
 from app.services.parser import ParsedRecord, TranscriptSegment
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ def _build_user_payload(
         ],
         "logical_blocks": logical_blocks or [],
         "domain_terms_sample": sorted(KNOWN_TERMS)[:60],
+        "norms_reference": build_norms_reference(),
         "output_format_example": STRUCTURED_JSON_EXAMPLE,
         "instruction": (
             "Верни JSON {\"records\": [...]} строго по формату output_format_example. "
@@ -55,7 +57,7 @@ def parse_structured_with_openai(
     response = client.chat.completions.create(
         model=settings.openai_model,
         messages=[
-            {"role": "system", "content": LLM_SYSTEM_RULES},
+            {"role": "system", "content": build_llm_system_rules()},
             {"role": "user", "content": json.dumps(_build_user_payload(full_text, segments, logical_blocks), ensure_ascii=False)},
         ],
         temperature=0.0,

@@ -103,6 +103,64 @@ def test_pipeline_keeps_four_rows_when_llm_would_merge(monkeypatch):
     assert all("левой стороне" not in (r.comment or "") for r in rows)
 
 
+def test_location_only_station_header():
+    from app.services.canonical_model import _location_only_fragment, split_into_position_fragments
+
+    text = "На станции магнититы 5 путь"
+    assert _location_only_fragment(text)
+    frags = split_into_position_fragments(text)
+    assert not frags or all(_location_only_fragment(f) for f in frags)
+
+
+def test_station_header_block_produces_no_rows():
+    from app.services.canonical_model import expand_blocks_to_canonical_rows
+    from app.services.segmentation import LogicalBlock
+
+    rows = expand_blocks_to_canonical_rows(
+        [LogicalBlock(index=0, text="На станции магнититы 5 путь", start=0.0, end=30.0)]
+    )
+    assert rows == []
+
+
+def test_asr_segments_station_track_and_no_1400_km():
+    """Сегмент ASR: «5 путь» не «путь 2»; 1400 у уширения — не км."""
+    from app.services.parser import TranscriptSegment
+    from app.services.parsing_pipeline import run_parsing_pipeline
+    from app.services.inspection_form import record_to_form_row
+
+    segs = [
+        TranscriptSegment(
+            text=(
+                "Перегон от никиты шомгу 1418 километр пике 2 87 метр отсутствует 1 стыковой болт "
+                "На 1418 км пикет 4 Метр 22 отсутствует 2 закладных болта На станции магнититы 5 путь"
+            ),
+            start=0.0,
+            end=30.0,
+        ),
+        TranscriptSegment(
+            text="2 звено не закручен 1 стыковой болт И уширение колеи 1400 1543 мм",
+            start=30.0,
+            end=47.0,
+        ),
+    ]
+    rows = normalize_all(
+        run_parsing_pipeline(ASR_TEXT, segs).records,
+        source_text=ASR_TEXT,
+    )
+    assert len(rows) == 4, [(r.raw_text, r.uchastok, r.km) for r in rows]
+    form3 = record_to_form_row(rows[2], 3)
+    form4 = record_to_form_row(rows[3], 4)
+    assert rows[2].put == "5"
+    assert rows[2].uchastok == "Магнетиты"
+    assert rows[2].peregon is None
+    assert form3["№ пути, стрелочного перевода"] == "5"
+    assert rows[3].uchastok == "Магнетиты"
+    assert rows[3].put == "5"
+    assert rows[3].km is None or rows[3].km != "1400"
+    assert "1400" not in (form4["Привязка (км,пк,м)"] or "")
+    assert form4["Местонахождение (перегон, станция)"] == "Магнетиты"
+
+
 def test_strip_ungrounded_rail_side_comment():
     assert strip_ungrounded_rail_side_comment(
         "на левой стороне рельсовой нити",
