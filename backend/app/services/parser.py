@@ -90,8 +90,8 @@ DEFECT_EVENT_ANCHOR_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Допустимая ширина колеи при уширении/сужении (мм), Распоряжение 2288р.
-_GAUGE_WIDTH_MM_RANGE = range(1520, 1610)
+# Допустимая ширина колеи по 2288р (1512–1548 мм), не ошибки ASR вроде «1400».
+from app.services.gauge_norms import is_plausible_gauge_width_mm as _is_plausible_gauge_width_mm
 
 TRANSITION_WORDS = {
     "далее", "затем", "потом", "следующий", "следующая", "следующее", "также",
@@ -251,7 +251,7 @@ def _extract_gauge_width_value(text: str) -> tuple[str | None, str | None]:
         candidates = [
             int(match.group(1))
             for match in re.finditer(r"\b(1\d{3})\b", normalized)
-            if int(match.group(1)) in _GAUGE_WIDTH_MM_RANGE
+            if _is_plausible_gauge_width_mm(int(match.group(1)))
         ]
         if len(candidates) >= 1 and re.search(r"\bмм\b", normalized):
             return str(candidates[-1]), "мм"
@@ -260,7 +260,7 @@ def _extract_gauge_width_value(text: str) -> tuple[str | None, str | None]:
     candidates = [
         int(match.group(1))
         for match in re.finditer(r"\b(1\d{3})\b", normalized)
-        if int(match.group(1)) in _GAUGE_WIDTH_MM_RANGE
+        if _is_plausible_gauge_width_mm(int(match.group(1)))
     ]
     if not candidates:
         return None, None

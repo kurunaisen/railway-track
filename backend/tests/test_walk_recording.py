@@ -53,6 +53,7 @@ def test_walk_recording_defects():
     assert "уширение" in defects[3].lower()
     assert rows[3].value == "1543"
     assert rows[3].unit == "мм"
+    assert rows[3].speed_limit == "60"
 
 
 def test_walk_recording_location_and_binding():

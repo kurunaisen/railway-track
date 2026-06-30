@@ -13,22 +13,18 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from app.services.rail_side import merge_comment
-from app.config import settings
+from app.services.gauge_norms import (
+    SpeedBand,
+    effective_norm_speed_kmh,
+    evaluate_gauge_width,
+    gauge_speed_limit_kmh,
+    is_gauge_context,
+)
 
 if TYPE_CHECKING:
     from app.services.parser import ParsedRecord
 
 INSTRUCTION_REF = "Распоряжение ОАО «РЖД» от 14.11.2016 № 2288р"
-
-
-@dataclass(frozen=True)
-class SpeedBand:
-    """Диапазон (above, up_to] мм → скорость км/ч; closed = движение закрывается."""
-
-    above: float
-    up_to: float | None
-    speed_kmh: int | None = None
-    closed: bool = False
 
 
 @dataclass(frozen=True)
@@ -104,19 +100,15 @@ def evaluate_norm_band(value: float, rule: TrackNormRule) -> SpeedBand | None:
     return None
 
 
-def effective_norm_speed_kmh(regulation_speed: int | None) -> int | None:
-    """Лимит по 2288р с учётом фактической макс. скорости на участке."""
-    if regulation_speed is None:
-        return None
-    line_max = settings.max_track_speed_kmh
-    if regulation_speed >= line_max:
-        return None
-    return regulation_speed
-
-
 def apply_track_norms(record: ParsedRecord) -> ParsedRecord:
     """Применяет нормы 2288р: превышение → неисправность + V огр. (если не сказано устно)."""
     text = _record_text(record)
+    if is_gauge_context(text):
+        return _apply_gauge_norms(record, text)
+    return _apply_measurement_norms(record, text)
+
+
+def _apply_measurement_norms(record: ParsedRecord, text: str) -> ParsedRecord:
     rule = match_track_norm_rule(text)
     if not rule:
         return record
@@ -144,6 +136,33 @@ def apply_track_norms(record: ParsedRecord) -> ParsedRecord:
         effective = effective_norm_speed_kmh(band.speed_kmh)
         if effective is not None:
             record.speed_limit = str(effective)
+
+    return record
+
+
+def _apply_gauge_norms(record: ParsedRecord, text: str) -> ParsedRecord:
+    value = _parse_numeric(record.value)
+    if value is None:
+        value = _parse_numeric(record.defect) or _parse_numeric(record.raw_text)
+    if value is None or not _unit_matches(record.unit, "мм"):
+        return record
+
+    evaluation = evaluate_gauge_width(value, text)
+    if evaluation.within_tolerance:
+        return record
+
+    if evaluation.defect_title:
+        record.defect = evaluation.defect_title
+    record.parameter = None
+    record.position_type = "defect"
+
+    band = evaluation.band
+    if band and band.closed:
+        record.comment = merge_comment(record.comment, "движение закрывается (2288р)")
+    elif not record.speed_limit:
+        speed = gauge_speed_limit_kmh(evaluation)
+        if speed is not None:
+            record.speed_limit = str(speed)
 
     return record
 

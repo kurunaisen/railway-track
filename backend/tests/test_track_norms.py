@@ -82,3 +82,68 @@ def test_joint_gap_from_transcript():
     row = rows[0]
     assert row.speed_limit == "60"
     assert row.defect == "стыковой зазор"
+
+
+def test_gauge_within_tolerance_no_defect():
+    rec = ParsedRecord(
+        defect="уширение рельсовой колеи",
+        value="1524",
+        unit="мм",
+        raw_text="уширение рельсовой колеи 1524 мм",
+    )
+    apply_track_norms(rec)
+    assert rec.speed_limit is None
+
+
+def test_gauge_widen_1543_speed_60():
+    """2288р табл. 2.5: 1524 < ширина ≤ 1544 мм → 60 км/ч (участок ≤140, установленная 61–120)."""
+    rec = ParsedRecord(
+        defect="уширение рельсовой колеи",
+        value="1543",
+        unit="мм",
+        raw_text="уширение рельсовой колеи 1543 мм",
+    )
+    apply_track_norms(rec)
+    assert rec.defect == "уширение рельсовой колеи"
+    assert rec.speed_limit == "60"
+
+
+def test_gauge_widen_1545_speed_25():
+    rec = ParsedRecord(
+        defect="уширение рельсовой колеи",
+        value="1545",
+        unit="мм",
+        raw_text="уширение рельсовой колеи 1545 мм",
+    )
+    apply_track_norms(rec)
+    assert rec.speed_limit == "25"
+
+
+def test_gauge_closed_above_1548():
+    rec = ParsedRecord(
+        defect="уширение рельсовой колеи",
+        value="1549",
+        unit="мм",
+        raw_text="уширение рельсовой колеи 1549 мм",
+    )
+    apply_track_norms(rec)
+    assert "закрывается" in (rec.comment or "")
+
+
+def test_gauge_switch_tighter_tolerance():
+    from app.services.gauge_norms import evaluate_gauge_width
+
+    evaluation = evaluate_gauge_width(1524, "стрелочный перевод уширение колеи")
+    assert not evaluation.within_tolerance
+    assert evaluation.defect_title == "уширение рельсовой колеи"
+
+
+def test_gauge_from_walk_transcript():
+    text = (
+        "На станции магнититы 5 путь 2 звено не закручен 1 стыковой болт "
+        "И уширение колеи 1400 1543 мм."
+    )
+    rows = normalize_all(run_parsing_pipeline(text).records)
+    gauge_row = [r for r in rows if r.defect and "уширен" in r.defect][0]
+    assert gauge_row.value == "1543"
+    assert gauge_row.speed_limit == "60"
