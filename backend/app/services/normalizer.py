@@ -6,6 +6,12 @@ import re
 
 from app.services.km_parse import merge_hesitated_km_value
 from app.services.parser import ParsedRecord
+from app.services.rail_side import (
+    extract_rail_side,
+    is_defect_continuation,
+    is_rail_side_only_fragment,
+    strip_rail_side_phrases,
+)
 from app.services.peregons import normalize_peregon
 from app.services.locations import is_peregon_haul
 from app.services.stations import normalize_station_name
@@ -88,6 +94,74 @@ def normalize_speed(value: str | None) -> str | None:
     return m.group(1) if m else value
 
 
+def _same_record_context(a: ParsedRecord, b: ParsedRecord) -> bool:
+    return (
+        a.logical_record_index == b.logical_record_index
+        and (a.km or "") == (b.km or "")
+        and (a.piket or "") == (b.piket or "")
+        and (a.peregon or "") == (b.peregon or "")
+    )
+
+
+def _append_defect_text(record: ParsedRecord, extra: str) -> None:
+    extra = extra.strip()
+    if not extra:
+        return
+    if record.defect:
+        if extra.lower() not in record.defect.lower():
+            record.defect = f"{record.defect} {extra}".strip()
+    else:
+        record.defect = extra
+    record.position_type = "defect"
+
+
+def reconcile_rail_side_rows(records: list[ParsedRecord]) -> list[ParsedRecord]:
+    """Сторона нити — в obekt/привязку; не отдельная неисправность."""
+    if not records:
+        return records
+
+    result: list[ParsedRecord] = []
+    pending_side: str | None = None
+
+    for record in records:
+        side = extract_rail_side(record.raw_text) or extract_rail_side(record.defect or "")
+        if side:
+            record.obekt = side
+            if record.defect and extract_rail_side(record.defect):
+                record.defect = None
+                record.parameter = None
+                record.value = None
+                record.unit = None
+                record.position_type = None
+
+        if is_rail_side_only_fragment(record.raw_text) or (
+            side and not record.defect and not record.parameter and not record.value
+        ):
+            pending_side = side or pending_side
+            continue
+
+        if pending_side and not record.obekt:
+            record.obekt = pending_side
+            pending_side = None
+
+        if result and is_defect_continuation(record.raw_text) and _same_record_context(result[-1], record):
+            _append_defect_text(result[-1], record.raw_text or "")
+            if record.obekt and not result[-1].obekt:
+                result[-1].obekt = record.obekt
+            continue
+
+        if side and not record.obekt:
+            record.obekt = side
+
+        cleaned_raw = strip_rail_side_phrases(record.raw_text or "")
+        if cleaned_raw and cleaned_raw != record.raw_text:
+            record.raw_text = cleaned_raw
+
+        result.append(record)
+
+    return result
+
+
 def normalize_record(record: ParsedRecord) -> ParsedRecord:
     if record.peregon and is_peregon_haul(record.peregon):
         record.peregon = normalize_peregon(record.peregon)
@@ -107,4 +181,5 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
 
 
 def normalize_all(records: list[ParsedRecord]) -> list[ParsedRecord]:
+    records = reconcile_rail_side_rows(records)
     return [normalize_record(r) for r in records]

@@ -6,6 +6,7 @@ import re
 from typing import Protocol
 
 from app.services.locations import format_location_for_table, is_peregon_haul
+from app.services.rail_side import extract_rail_side, is_rail_side_only_fragment
 
 FORM_COLUMNS: tuple[str, ...] = (
     "Nп/п",
@@ -132,6 +133,11 @@ def format_binding(rec: FormRowSource) -> str:
     parts: list[str] = []
     km = (rec.km or "").strip()
     piket = (rec.piket or "").strip()
+    side = (rec.obekt or "").strip()
+    if side in ("рельс", "шпала", "стык"):
+        side = ""
+    if not side or side not in ("левая нить", "правая нить"):
+        side = extract_rail_side(rec.raw_text or "") or extract_rail_side(rec.comment or "") or side
     if km:
         parts.append(f"{km} км")
     if piket:
@@ -144,6 +150,8 @@ def format_binding(rec: FormRowSource) -> str:
                 parts.append(f"м {meters}")
         else:
             parts.append(f"пк {piket}")
+    if side:
+        parts.append(side)
     return ", ".join(parts)
 
 
@@ -173,7 +181,7 @@ def format_defect(rec: FormRowSource) -> str:
         return " ".join(chunks)
 
     raw = (rec.raw_text or "").strip()
-    if raw and len(raw) < 500:
+    if raw and len(raw) < 500 and not is_rail_side_only_fragment(raw):
         return raw
     return ""
 

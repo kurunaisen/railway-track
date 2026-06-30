@@ -30,6 +30,11 @@ from app.services.parser import (
     _normalize_text,
     _split_multi_defects,
 )
+from app.services.rail_side import (
+    extract_rail_side,
+    is_rail_side_only_fragment,
+    strip_rail_side_phrases,
+)
 from app.services.segmentation import LogicalBlock
 
 POSITION_TYPES = ("parameter", "defect", "speed_limit")
@@ -74,6 +79,7 @@ class LogicalRecordContext:
     put: str | None = None
     km: str | None = None
     piket: str | None = None
+    obekt: str | None = None
     comment: str | None = None
     segment_start: float | None = None
     segment_end: float | None = None
@@ -104,7 +110,7 @@ def _inherit_location_fields(
     ctx: LogicalRecordContext, inherited: LogicalRecordContext, loc_text: str
 ) -> None:
     """При новом перегоне не наследуем путь/км/пикет — только из текущего фрагмента."""
-    always = ("record_date", "uchastok")
+    always = ("record_date", "uchastok", "obekt")
     location = () if _is_new_haul_block(loc_text) else ("peregon", "put", "km", "piket")
     for field in (*always, *location):
         if not getattr(ctx, field) and getattr(inherited, field):
@@ -220,6 +226,8 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
     """Извлекает ровно одну позицию из фрагмента (правило 10.3)."""
     normalized = _normalize_text(fragment)
     raw = fragment.strip()
+    rail_side = extract_rail_side(normalized)
+    obekt = rail_side or _extract_obekt(normalized)
 
     for marker in SPEED_LIMIT_MARKERS:
         if marker in normalized:
@@ -253,7 +261,7 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
             parameter=param,
             value=value,
             unit=unit,
-            obekt=_extract_obekt(normalized),
+            obekt=obekt,
             raw_text=raw,
         )
         if not value:
@@ -261,15 +269,19 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
         return item
 
     if defect:
-        after = normalized.split(defect, 1)[-1].strip(" ,:-")
+        after = normalized.split(defect.split()[0], 1)[-1].strip(" ,:-")
         value, unit = _extract_value_unit(after)
+        full_defect = defect
+        if defect == "отсутствует" or defect.startswith("отсутств"):
+            tail = normalized[normalized.find(defect.split()[0]):].strip(" ,.;")
+            full_defect = tail[:120]
         item = PositionItem(
             position_index=position_index,
             position_type="defect",
-            defect=defect,
+            defect=full_defect,
             value=value,
             unit=unit,
-            obekt=_extract_obekt(normalized),
+            obekt=obekt,
             raw_text=raw,
         )
         if not value and "трещина" not in defect:
@@ -289,7 +301,7 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
             defect=kw if ptype == "defect" else None,
             value=value,
             unit=unit,
-            obekt=_extract_obekt(normalized),
+            obekt=obekt,
             raw_text=raw,
         )
 
@@ -321,7 +333,7 @@ def position_to_row(ctx: LogicalRecordContext, pos: PositionItem) -> ParsedRecor
         defect=pos.defect,
         value=pos.value,
         unit=pos.unit,
-        obekt=pos.obekt,
+        obekt=ctx.obekt or pos.obekt,
         speed_limit=pos.speed_limit if pos.position_type == "speed_limit" else None,
         raw_text=pos.raw_text,
         disputed_fields=list(pos.disputed_fields),
@@ -344,23 +356,31 @@ def expand_blocks_to_canonical_rows(blocks: list[LogicalBlock]) -> list[ParsedRe
         location_parts = _split_by_location(block.text)
 
         for loc_text in location_parts:
+            side = extract_rail_side(loc_text)
+            position_text = strip_rail_side_phrases(loc_text) if side else loc_text
+
             ctx = extract_logical_record_context(
                 loc_text,
                 logical_record_index,
                 block.start,
                 block.end,
             )
+            if side:
+                ctx.obekt = side
             _inherit_location_fields(ctx, inherited, loc_text)
 
-            fragments = split_into_position_fragments(loc_text)
-            if not fragments:
+            fragments = split_into_position_fragments(position_text)
+            fragments = [f for f in fragments if not is_rail_side_only_fragment(f)]
+            if not fragments and not side:
                 fragments = [loc_text]
+            elif not fragments and side:
+                fragments = [position_text] if position_text.strip() else []
 
             for pos_idx, frag in enumerate(fragments):
                 pos = parse_position(frag, pos_idx)
                 rows.append(position_to_row(ctx, pos))
 
-            for field in ("record_date", "uchastok", "peregon", "put", "km", "piket", "comment"):
+            for field in ("record_date", "uchastok", "peregon", "put", "km", "piket", "obekt", "comment"):
                 val = getattr(ctx, field)
                 if val:
                     setattr(inherited, field, val)
@@ -404,6 +424,7 @@ def enforce_single_position_per_row(rows: list[ParsedRecord]) -> list[ParsedReco
             put=row.put,
             km=row.km,
             piket=row.piket,
+            obekt=row.obekt,
             comment=row.comment,
             segment_start=row.segment_start,
             segment_end=row.segment_end,

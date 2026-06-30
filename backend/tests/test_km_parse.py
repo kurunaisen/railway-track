@@ -37,7 +37,7 @@ def test_user_asr_example():
     record = parse_chunk(text)
     rows = normalize_all([record])
     assert rows[0].km == "1385"
-    assert rows[0].piket == "5"
+    assert rows[0].piket == "5+82"
 
 
 def test_plain_km_still_works():

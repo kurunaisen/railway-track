@@ -168,6 +168,14 @@ def _extract_piket(text: str) -> str | None:
     if m:
         return f"{m.group(1).replace(',', '.')}+{m.group(2).replace(',', '.')}"
 
+    m = re.search(
+        r"пикет\s*(?:№|номер|n)?\s*(\d+(?:[.,]\d+)?)\s+метр\s*(\d+(?:[.,]\d+)?)",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        return f"{m.group(1).replace(',', '.')}+{m.group(2).replace(',', '.')}"
+
     for pat in (
         r"пикет\s*(?:№|номер|n)?\s*(\d+(?:[.,]\d+)?)",
         r"(\d+(?:[.,]\d+)?)\s*пикет",
@@ -242,6 +250,13 @@ def _extract_parameter(text: str) -> str | None:
 
 
 def _extract_defect(text: str) -> str | None:
+    m = re.search(
+        r"(отсутств(?:ует|уют)\s+(?:\d+\s+)?(?:стыков(?:ой|ого|ые)?\s+)?(?:болт\w*|гайк\w*|шпал\w*|клемм\w*)?)",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        return m.group(1).strip()
     for kw in DEFECT_KEYWORDS:
         if kw in text:
             return kw
