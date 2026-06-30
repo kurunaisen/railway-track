@@ -101,6 +101,49 @@ def _format_path_number(num: str, rec: FormRowSource, *texts: str | None) -> str
     return num
 
 
+def resolve_track_parts(rec: FormRowSource) -> tuple[str | None, str | None, str | None]:
+    """
+    Путь, стрелочный перевод и вид объекта (модель).
+    Возвращает (путь, стр.п., объект), напр. («2 гл.п.», «стр.п. 2», «путь, стрелочный перевод»).
+    """
+    sources = (rec.raw_text, rec.comment)
+    path_num = _explicit_path_number(*sources)
+    switch_num = _explicit_switch_number(*sources)
+    put = (rec.put or "").strip()
+
+    path_display: str | None = None
+    if path_num:
+        path_display = _format_path_number(path_num, rec, *sources)
+    elif switch_num is None and put.isdigit():
+        path_display = _format_path_number(put, rec, *sources)
+
+    switch_display = f"стр.п. {switch_num}" if switch_num else None
+
+    kinds: list[str] = []
+    if path_display:
+        kinds.append("путь")
+    if switch_display:
+        kinds.append("стрелочный перевод")
+    object_kind = ", ".join(kinds) if kinds else None
+
+    return path_display, switch_display, object_kind
+
+
+def format_path(rec: FormRowSource) -> str | None:
+    path, _, _ = resolve_track_parts(rec)
+    return path
+
+
+def format_switch(rec: FormRowSource) -> str | None:
+    _, switch, _ = resolve_track_parts(rec)
+    return switch
+
+
+def format_object_kind(rec: FormRowSource) -> str | None:
+    _, _, kind = resolve_track_parts(rec)
+    return kind
+
+
 def format_location(rec: FormRowSource) -> str:
     return format_location_for_table(
         peregon=rec.peregon,
@@ -111,23 +154,11 @@ def format_location(rec: FormRowSource) -> str:
 
 
 def format_track(rec: FormRowSource) -> str:
-    sources = (rec.raw_text, rec.comment)
-    path_num = _explicit_path_number(*sources)
-    switch_num = _explicit_switch_number(*sources)
-    put = (rec.put or "").strip()
-
-    parts: list[str] = []
-    if path_num:
-        parts.append(_format_path_number(path_num, rec, *sources))
-    elif switch_num is None and put.isdigit():
-        parts.append(_format_path_number(put, rec, *sources))
-
-    if switch_num:
-        parts.append(f"стр.п. {switch_num}")
-
+    path, switch, _ = resolve_track_parts(rec)
+    parts = [p for p in (path, switch) if p]
     if parts:
         return ", ".join(parts)
-    return put
+    return (rec.put or "").strip()
 
 
 def format_binding(rec: FormRowSource) -> str:

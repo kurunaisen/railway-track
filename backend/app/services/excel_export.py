@@ -11,6 +11,7 @@ from app.services.inspection_form import build_form_rows
 from app.services.inspection_repository import load_flat_rows, load_latest_done_job
 from app.services.session_adapter import audio_file_to_session_out
 from app.services.transcript_crypto import decrypt_transcript_text
+from app.services.inspection_form import format_object_kind, format_path, format_switch
 from app.services.wide_table import build_wide_rows
 
 HEADER_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
@@ -94,10 +95,11 @@ def _sheet_records_long(records) -> pd.DataFrame:
             "Дата": rec.record_date,
             "Участок": rec.uchastok,
             "Перегон": rec.peregon,
-            "Путь": rec.put,
+            "Путь": format_path(rec),
+            "Стрелочный перевод": format_switch(rec),
             "Км": rec.km,
             "Пикет": rec.piket,
-            "Объект": rec.obekt,
+            "Объект": format_object_kind(rec),
             "Параметр": rec.parameter,
             "Значение": rec.value,
             "Единица": rec.unit,
