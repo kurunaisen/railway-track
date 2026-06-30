@@ -33,6 +33,11 @@ _DEFECT_HINT_RE = re.compile(
     re.IGNORECASE,
 )
 
+_SIDE_NOTE_FALLBACK = {
+    "левая нить": "на левой стороне рельсовой нити",
+    "правая нить": "на правой стороне рельсовой нити",
+}
+
 
 def extract_rail_side(text: str | None) -> str | None:
     """«на левой стороне рельсовой нити» → «левая нить»."""
@@ -50,30 +55,30 @@ def extract_rail_side(text: str | None) -> str | None:
 
 
 def extract_rail_side_note(text: str | None) -> str | None:
-    """Фраза для столбца «Примечание»."""
+    """Фраза для столбца «Примечание» (строчными буквами)."""
     if not text:
         return None
     match = _RAIL_SIDE_PHRASE_RE.search(text)
     if match:
         phrase = re.sub(r"\s+", " ", match.group(0)).strip(" ,.;:-")
         if phrase:
-            return phrase[0].upper() + phrase[1:]
+            return phrase.lower()
     side = extract_rail_side(text)
-    if side == "левая нить":
-        return "На левой стороне рельсовой нити"
-    if side == "правая нить":
-        return "На правой стороне рельсовой нити"
+    if side:
+        return _SIDE_NOTE_FALLBACK.get(side, side)
     return None
 
 
 def merge_comment(existing: str | None, note: str) -> str:
+    note = note.strip().lower()
     if not note:
-        return (existing or "").strip()
+        return (existing or "").strip().lower()
     if not existing:
         return note
-    if note.lower() in existing.lower():
-        return existing.strip()
-    return f"{existing.strip()}. {note}"
+    existing = existing.strip().lower()
+    if note in existing:
+        return existing
+    return f"{existing}. {note}"
 
 
 def strip_rail_side_phrases(text: str) -> str:

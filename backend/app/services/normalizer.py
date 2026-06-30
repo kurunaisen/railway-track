@@ -185,6 +185,8 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
     record.piket = normalize_piket(record.piket)
     record.unit = normalize_unit(record.unit)
     record.speed_limit = normalize_speed(record.speed_limit)
+    if record.comment:
+        record.comment = record.comment.strip().lower()
     if record.value:
         record.value = record.value.replace(",", ".").strip()
     return record

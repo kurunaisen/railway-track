@@ -15,7 +15,7 @@ def test_extract_left_rail_side():
 
 
 def test_extract_rail_side_note():
-    assert extract_rail_side_note("на левой стороне рельсовой нити") == "На левой стороне рельсовой нити"
+    assert extract_rail_side_note("на левой стороне рельсовой нити") == "на левой стороне рельсовой нити"
 
 
 def test_rail_side_is_not_defect_fragment():

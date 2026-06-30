@@ -150,7 +150,7 @@ def format_binding(rec: FormRowSource) -> str:
 
 def format_note(rec: FormRowSource) -> str:
     if rec.comment and rec.comment.strip():
-        return rec.comment.strip()
+        return rec.comment.strip().lower()
     note = extract_rail_side_note(rec.raw_text or "")
     return note or ""
 
