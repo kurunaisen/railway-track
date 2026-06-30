@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.models import AudioFile, ProcessingJob
+from app.models import AudioFile, Export, ProcessingJob
 from app.schemas import (
     AudioSessionOut,
     JobOut,
     LogicalBlockOut,
     LogicalRecordOut,
+    SessionSummaryOut,
     StructuredRecordsOut,
     TrackRecordOut,
     TranscriptSegmentOut,
@@ -204,6 +206,51 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
         logical_records_count=len(_build_logical_records(rows)),
         positions_count=len(rows),
         structured_records=structured,
+    )
+
+
+def _count_positions(job: ProcessingJob | None) -> int:
+    if not job:
+        return 0
+    return sum(len(rec.items) for rec in job.inspection_records)
+
+
+def _export_stats(db: Session, audio_file_id: int) -> tuple[int, datetime | None]:
+    rows = (
+        db.query(Export.created_at)
+        .join(ProcessingJob)
+        .filter(ProcessingJob.audio_file_id == audio_file_id)
+        .order_by(Export.created_at.desc())
+        .all()
+    )
+    if not rows:
+        return 0, None
+    last: datetime = rows[0][0]
+    return len(rows), last
+
+
+def audio_file_to_summary(db: Session, audio: AudioFile) -> SessionSummaryOut:
+    active = load_active_job(db, audio.id)
+    done = load_latest_done_job(db, audio.id)
+    status = _derive_status(audio, active, done)
+    confirmed = False
+    positions_count = 0
+    if done:
+        meta = done.get_pipeline_metadata()
+        confirmed = bool(meta.get("confirmed"))
+        positions_count = _count_positions(done)
+    export_count, last_export_at = _export_stats(db, audio.id)
+    return SessionSummaryOut(
+        id=audio.id,
+        original_name=audio.original_filename,
+        status=status,
+        created_at=audio.created_at,
+        updated_at=audio.updated_at,
+        positions_count=positions_count,
+        confirmed=confirmed,
+        has_table=positions_count > 0,
+        export_count=export_count,
+        last_export_at=last_export_at,
     )
 
 

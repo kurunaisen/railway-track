@@ -4,8 +4,19 @@ const TOKEN_KEY = "railway_token";
 const USER_KEY = "railway_user";
 
 export interface AuthUser {
+  id?: number;
   username: string;
   role: string;
+  avatar_id?: string;
+}
+
+export interface UserProfile {
+  id: number;
+  username: string;
+  name: string;
+  role: string;
+  avatar_id: string;
+  email: string;
 }
 
 export function getToken(): string | null {
@@ -15,6 +26,14 @@ export function getToken(): string | null {
 export function setAuth(token: string, user: AuthUser): void {
   sessionStorage.setItem(TOKEN_KEY, token);
   sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function updateStoredUser(patch: Partial<AuthUser>): AuthUser | null {
+  const current = getUser();
+  if (!current) return null;
+  const next = { ...current, ...patch };
+  sessionStorage.setItem(USER_KEY, JSON.stringify(next));
+  return next;
 }
 
 export function clearAuth(): void {
@@ -37,6 +56,44 @@ export function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function profileToAuthUser(profile: UserProfile): AuthUser {
+  return {
+    id: profile.id,
+    username: profile.username || profile.name,
+    role: profile.role,
+    avatar_id: profile.avatar_id,
+  };
+}
+
+export async function fetchMe(): Promise<AuthUser | null> {
+  const token = getToken();
+  if (!token) return getUser();
+  const res = await fetch(`${apiBase()}/auth/me`, { headers: authHeaders() });
+  if (!res.ok) return getUser();
+  const profile = (await res.json()) as UserProfile;
+  const user = profileToAuthUser(profile);
+  const existing = getUser();
+  if (existing) {
+    setAuth(token, { ...existing, ...user });
+  }
+  return user;
+}
+
+export async function updateProfileAvatar(avatarId: string): Promise<UserProfile> {
+  const res = await fetch(`${apiBase()}/auth/profile`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ avatar_id: avatarId }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text.includes("detail") ? JSON.parse(text).detail : "Не удалось сохранить профиль");
+  }
+  const profile = (await res.json()) as UserProfile;
+  updateStoredUser(profileToAuthUser(profile));
+  return profile;
+}
+
 export async function login(username: string, password: string): Promise<AuthUser> {
   const res = await fetch(`${apiBase()}/auth/login`, {
     method: "POST",
@@ -50,7 +107,8 @@ export async function login(username: string, password: string): Promise<AuthUse
   const data = await res.json();
   const user = { username: data.username, role: data.role };
   setAuth(data.access_token, user);
-  return user;
+  const profile = await fetchMe();
+  return profile ?? user;
 }
 
 export async function checkHealth(): Promise<{ auth_required: boolean }> {

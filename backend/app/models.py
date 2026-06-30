@@ -33,6 +33,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), default="operator")
     password_hash: Mapped[str] = mapped_column(String(256))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    avatar_id: Mapped[str] = mapped_column(String(32), default="star")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     audio_files: Mapped[list["AudioFile"]] = relationship(back_populates="uploader")

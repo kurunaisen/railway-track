@@ -1,13 +1,31 @@
 import logging
 
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from app.auth.security import hash_password
 from app.config import settings
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.models import User
 
 logger = logging.getLogger(__name__)
+
+
+def run_schema_migrations() -> None:
+    """Lightweight migrations for columns added after initial deploy."""
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    columns = {col["name"] for col in inspector.get_columns("users")}
+    if "avatar_id" in columns:
+        return
+    dialect = engine.dialect.name
+    with engine.begin() as conn:
+        if dialect == "sqlite":
+            conn.execute(text("ALTER TABLE users ADD COLUMN avatar_id VARCHAR(32) DEFAULT 'star'"))
+        else:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_id VARCHAR(32) DEFAULT 'star'"))
+    logger.info("Added users.avatar_id column")
 
 
 def seed_default_admin() -> None:

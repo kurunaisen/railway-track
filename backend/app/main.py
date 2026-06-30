@@ -21,7 +21,7 @@ from app.database import Base, engine
 
 from app.routers import admin, api, auth
 
-from app.startup import seed_default_admin
+from app.startup import run_schema_migrations, seed_default_admin
 
 
 
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
 
-
+run_schema_migrations()
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 

@@ -208,6 +208,37 @@ export function exportExcelUrl(sessionId: number): string {
   return `${API}/sessions/${sessionId}/export`;
 }
 
+export interface SessionSummary {
+  id: number;
+  original_name: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  positions_count: number;
+  confirmed: boolean;
+  has_table: boolean;
+  export_count: number;
+  last_export_at: string | null;
+}
+
+export async function listSessionSummaries(): Promise<SessionSummary[]> {
+  const res = await apiFetch(`${API}/sessions/summary`);
+  return res.json();
+}
+
+export async function downloadSessionExcel(sessionId: number): Promise<void> {
+  const res = await apiFetch(`${API}/sessions/${sessionId}/export`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `railway_session_${sessionId}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function formatTime(seconds: number | null): string {
   if (seconds == null) return "—";
   const m = Math.floor(seconds / 60);

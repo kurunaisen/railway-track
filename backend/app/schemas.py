@@ -23,12 +23,30 @@ class UserOut(BaseModel):
     email: str
     role: str
     is_active: bool
+    avatar_id: str = "star"
     created_at: datetime
 
     @computed_field
     @property
     def username(self) -> str:
         return self.name
+
+
+class ProfileUpdateRequest(BaseModel):
+    avatar_id: str | None = None
+
+
+class SessionSummaryOut(BaseModel):
+    id: int
+    original_name: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    positions_count: int = 0
+    confirmed: bool = False
+    has_table: bool = False
+    export_count: int = 0
+    last_export_at: datetime | None = None
 
 
 class AuditLogOut(BaseModel):

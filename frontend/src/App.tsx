@@ -4,7 +4,7 @@ import {
   PIPELINE_STEPS,
   canEdit,
   confirmSession,
-  exportExcelUrl,
+  downloadSessionExcel,
   fieldLabel,
   formatTime,
   getJob,
@@ -15,10 +15,12 @@ import {
   saveSession,
   uploadAudio,
 } from "./api";
-import { type AuthUser, checkHealth, clearAuth, getUser } from "./auth";
+import { type AuthUser, checkHealth, clearAuth, fetchMe, getUser } from "./auth";
 import { healthUrl } from "./config";
 import Login from "./Login";
 import { APP_BRAND_ACCENT, APP_BRAND_MAIN, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
+import { AccountPanel } from "./profile/AccountPanel";
+import { ProfileAvatar } from "./profile/ProfileAvatar";
 
 function MicIcon() {
   return (
@@ -57,7 +59,7 @@ function AppFooter() {
           <p className="footer-tagline">{APP_TAGLINE}</p>
         </div>
         <p className="footer-copy">
-          разработчик{" "}
+          от разработчика{" "}
           <a className="footer-link" href={DEVELOPER_URL} target="_blank" rel="noopener noreferrer">
             {DEVELOPER_NAME}
           </a>
@@ -93,6 +95,7 @@ export default function App() {
   const [recording, setRecording] = useState(false);
   const [saved, setSaved] = useState(false);
   const [tableView, setTableView] = useState<"long" | "wide">("long");
+  const [accountOpen, setAccountOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -118,6 +121,13 @@ export default function App() {
         window.clearTimeout(fallback);
         setAuthRequired(h.auth_required);
         if (!h.auth_required && !user) setUser({ username: "dev", role: "operator" });
+        if (getUser() && h.auth_required) {
+          fetchMe()
+            .then((profile) => {
+              if (!cancelled && profile) setUser(profile);
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -233,6 +243,32 @@ export default function App() {
     clearAuth();
     setUser(null);
     setSession(null);
+    setAccountOpen(false);
+  };
+
+  const handleOpenSession = async (sessionId: number) => {
+    setError(null);
+    setLoading(true);
+    try {
+      setSession(await getSession(sessionId));
+      setSaved(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось открыть запись");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExcelDownload = async () => {
+    if (!session) return;
+    setLoading(true);
+    try {
+      await downloadSessionExcel(session.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка выгрузки Excel");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (authRequired === null) {
@@ -300,16 +336,6 @@ export default function App() {
             <BrandTitle />
           </div>
           <div className="session-badge">
-            {user && (
-              <>
-                <span className="status status-role">{user.username} ({user.role})</span>
-                {authRequired && (
-                  <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
-                    Выход
-                  </button>
-                )}
-              </>
-            )}
             {session && (
               <>
                 <span className={`status status-${session.status}`}>{statusLabel(session.status)}</span>
@@ -319,6 +345,17 @@ export default function App() {
                 )}
                 <span className="filename">{session.original_name}</span>
               </>
+            )}
+            {user && (
+              <button
+                type="button"
+                className="user-menu-btn"
+                onClick={() => setAccountOpen(true)}
+                aria-label={`Аккаунт: ${user.username}`}
+                title={user.username}
+              >
+                <ProfileAvatar avatarId={user.avatar_id} name={user.username} size="sm" />
+              </button>
             )}
           </div>
         </div>
@@ -488,9 +525,9 @@ export default function App() {
                     </button>
                   </>
                 )}
-                <a className="btn btn-primary" href={exportExcelUrl(session.id)} download>
+                <button type="button" className="btn btn-primary" onClick={() => void handleExcelDownload()} disabled={loading}>
                   Excel
-                </a>
+                </button>
               </div>
             </div>
             {!editable && <p className="hint">Режим просмотра (viewer).</p>}
@@ -634,6 +671,17 @@ export default function App() {
         )}
         </div>
       </main>
+
+      {user && (
+        <AccountPanel
+          open={accountOpen}
+          user={user}
+          onClose={() => setAccountOpen(false)}
+          onLogout={handleLogout}
+          onOpenSession={handleOpenSession}
+          onAvatarSaved={(avatarId) => setUser((prev) => (prev ? { ...prev, avatar_id: avatarId } : prev))}
+        />
+      )}
 
       <AppFooter />
     </div>

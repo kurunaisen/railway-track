@@ -38,6 +38,8 @@ from app.schemas import (
 
     ProcessResponse,
 
+    SessionSummaryOut,
+
     StructuredRecordsOut,
     TrackRecordCreate,
 
@@ -63,7 +65,7 @@ from app.services.inspection_repository import (
 
 from app.services.processing import run_session_processing
 
-from app.services.session_adapter import _flat_to_track_out, audio_file_to_session_out
+from app.services.session_adapter import _flat_to_track_out, audio_file_to_session_out, audio_file_to_summary
 
 from app.services.storage import get_storage
 
@@ -454,6 +456,36 @@ def list_session_jobs(
 
 
     return [_job_to_out(j) for j in jobs]
+
+
+
+
+
+@router.get("/sessions/summary", response_model=list[SessionSummaryOut])
+
+def list_session_summaries(
+
+    db: Session = Depends(get_db),
+
+    current: CurrentUser = Depends(get_current_user),
+
+):
+
+    q = db.query(AudioFile)
+
+    if not current.has_role("admin"):
+
+        if current.id:
+
+            q = q.filter(
+
+                (AudioFile.uploaded_by == current.id) | (AudioFile.uploaded_by.is_(None))
+
+            )
+
+    files = q.order_by(AudioFile.created_at.desc()).limit(100).all()
+
+    return [audio_file_to_summary(db, f) for f in files]
 
 
 
