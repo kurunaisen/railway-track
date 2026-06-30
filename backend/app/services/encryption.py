@@ -18,7 +18,13 @@ def _get_fernet() -> Fernet | None:
     if not settings.encrypt_transcripts or not settings.data_encryption_key:
         return None
     if _fernet is None:
-        _fernet = Fernet(settings.data_encryption_key.encode())
+        try:
+            _fernet = Fernet(settings.data_encryption_key.encode())
+        except Exception as exc:
+            raise RuntimeError(
+                "Неверный DATA_ENCRYPTION_KEY. Сгенерируйте ключ Fernet: "
+                'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            ) from exc
     return _fernet
 
 

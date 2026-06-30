@@ -191,7 +191,13 @@ async def upload_audio(
 
     storage = get_storage()
 
-    uri = storage.save(content, stored_name)
+    try:
+
+        uri = storage.save(content, stored_name)
+
+    except Exception as exc:
+
+        raise HTTPException(status_code=422, detail=f"Ошибка сохранения файла: {exc}") from exc
 
 
 
@@ -357,7 +363,7 @@ def process_session(
 
         count = run_session_processing(db, session_id, job.id)
 
-    except (RuntimeError, FileNotFoundError) as exc:
+    except Exception as exc:
 
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
