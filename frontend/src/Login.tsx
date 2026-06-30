@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { APP_NAME } from "./branding";
 import { login, type AuthUser } from "./auth";
 
 interface Props {
@@ -39,8 +40,8 @@ export default function Login({ onSuccess, authRequired }: Props) {
 
   return (
     <div className="login-panel">
-      <h2>Вход в систему</h2>
-      <p className="hint">Серверная обработка аудио · защищённый доступ</p>
+      <h2>Вход в {APP_NAME}</h2>
+      <p className="hint">Модуль интеграции аудио в таблицу</p>
       <form onSubmit={handleSubmit} className="login-form">
         <label>
           Логин

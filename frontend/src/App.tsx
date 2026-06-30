@@ -18,6 +18,7 @@ import {
 import { type AuthUser, checkHealth, clearAuth, getUser } from "./auth";
 import { healthUrl } from "./config";
 import Login from "./Login";
+import { APP_NAME, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
 
 function MicIcon() {
   return (
@@ -80,6 +81,21 @@ function LogoMark() {
         <circle cx="28" cy="12" r="1.2" fill="#0a0a0e" />
       </svg>
     </div>
+  );
+}
+
+function AppFooter() {
+  return (
+    <footer className="footer">
+      <span>{APP_NAME}</span>
+      <span className="footer-sep">·</span>
+      <span>
+        разработчик{" "}
+        <a className="footer-link" href={DEVELOPER_URL} target="_blank" rel="noopener noreferrer">
+          {DEVELOPER_NAME}
+        </a>
+      </span>
+    </footer>
   );
 }
 
@@ -277,7 +293,7 @@ export default function App() {
             <div className="logo">
               <LogoMark />
               <div>
-                <h1>Осмотр пути</h1>
+                <h1>{APP_NAME}</h1>
                 <p>Защищённый доступ</p>
               </div>
             </div>
@@ -288,6 +304,7 @@ export default function App() {
             <Login authRequired={authRequired} onSuccess={setUser} />
           </section>
         </main>
+        <AppFooter />
       </div>
     );
   }
@@ -317,8 +334,8 @@ export default function App() {
           <div className="logo">
             <LogoMark />
             <div>
-              <h1>Осмотр пути</h1>
-              <p>Распознавание речевых описаний состояния пути</p>
+              <h1>{APP_NAME}</h1>
+              <p>{APP_TAGLINE}</p>
             </div>
           </div>
           <div className="session-badge">
@@ -349,9 +366,10 @@ export default function App() {
       <main className="main">
         {editable && (
           <section className="panel upload-panel">
-            <h2>1. Загрузка аудио</h2>
+            <h2>Загрузите аудио или запишите аудио</h2>
             <p className="hint">
-              Форматы: WAV, MP3, M4A, FLAC. Обработка выполняется на сервере (mono 16 kHz WAV).
+              Форматы: WAV, MP3, M4A, FLAC. Запись с микрофона или файл — результат попадёт в таблицу после
+              обработки на сервере (mono 16 kHz WAV).
             </p>
             <div className="upload-actions">
               <input
@@ -654,9 +672,7 @@ export default function App() {
         )}
       </main>
 
-      <footer className="footer">
-        <span>Railway Track Inspection</span> · React · FastAPI · Yandex ASR · GPT
-      </footer>
+      <AppFooter />
     </div>
   );
 }
