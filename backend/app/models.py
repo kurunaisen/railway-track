@@ -135,7 +135,10 @@ class ProcessingJob(Base):
     def get_pipeline_metadata(self) -> dict:
         if not self.pipeline_metadata_json:
             return {}
-        return json.loads(self.pipeline_metadata_json)
+        try:
+            return json.loads(self.pipeline_metadata_json)
+        except json.JSONDecodeError:
+            return {}
 
     def set_pipeline_metadata(self, data: dict) -> None:
         self.pipeline_metadata_json = json.dumps(data, ensure_ascii=False)

@@ -26,6 +26,8 @@ def test_blockpost_requires_km():
 
 def test_peregon_display():
     assert is_peregon_haul("Кица — Блокпост 1381 км")
+    assert is_peregon_haul("А-Б")
+    assert not is_peregon_haul("Комсомольск-Мурманский")
     assert format_location_for_table(peregon="Кица — Блокпост 1381 км") == "Кица-Блокпост 1381 км"
 
 

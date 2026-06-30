@@ -1,5 +1,7 @@
 import json
 
+import logging
+
 import shutil
 
 import uuid
@@ -68,6 +70,8 @@ from app.services.storage import get_storage
 
 
 router = APIRouter(prefix="/api", tags=["railway"])
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -843,6 +847,12 @@ def export_excel(
     except ValueError as exc:
 
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    except Exception as exc:
+
+        logger.exception("Excel export failed for session %s", session_id)
+
+        raise HTTPException(status_code=422, detail=f"Ошибка экспорта Excel: {exc}") from exc
 
 
 

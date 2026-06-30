@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Protocol
 
-from app.services.locations import format_location_for_table
+from app.services.locations import format_location_for_table, is_peregon_haul
 
 FORM_COLUMNS: tuple[str, ...] = (
     "Nп/п",
@@ -48,7 +48,6 @@ _MAIN_PATH_EXPLICIT_RE = re.compile(
     re.IGNORECASE,
 )
 _PEREGON_WORD_RE = re.compile(r"\bперегон\b", re.IGNORECASE)
-_HAUL_NAME_RE = re.compile(r"[-–—]")
 
 
 def _normalize_track_text(text: str) -> str:
@@ -88,7 +87,7 @@ def _is_peregon_context(rec: FormRowSource, *texts: str | None) -> bool:
     for text in texts:
         if text and _PEREGON_WORD_RE.search(_normalize_track_text(text)):
             return True
-    if rec.peregon and _HAUL_NAME_RE.search(rec.peregon.strip()):
+    if rec.peregon and is_peregon_haul(rec.peregon):
         return True
     return False
 

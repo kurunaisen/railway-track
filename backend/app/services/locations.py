@@ -6,17 +6,28 @@ import re
 
 from app.services.peregons import normalize_peregon
 from app.services.stations import (
+    CANONICAL_STATIONS,
     match_location_in_text,
     normalize_blockpost,
     normalize_station_name,
 )
 
+_DASH_RE = re.compile(r"[-–—]")
 _HAUL_SEP_RE = re.compile(r"\s+[-–—]\s+")
 _STATION_PREFIX_RE = re.compile(
     r"станци[яи]\s+(.+?)(?:\s*,|\s+путь|\s+главн|\s+стрелоч|\s+блок|\s+км|\s+километр|\s+пикет|$)",
     re.IGNORECASE,
 )
 _PEREGON_PREFIX_RE = re.compile(r"\bперегон\b", re.IGNORECASE)
+
+
+def _is_known_single_station(value: str) -> bool:
+    """Станция с дефисом в названии (Комсомольск-Мурманский) — не перегон."""
+    text = value.strip()
+    if text in CANONICAL_STATIONS:
+        return True
+    norm = normalize_station_name(text)
+    return bool(norm and norm == text and norm in CANONICAL_STATIONS)
 
 
 def is_peregon_haul(value: str | None) -> bool:
@@ -26,7 +37,17 @@ def is_peregon_haul(value: str | None) -> bool:
     text = value.strip()
     if _PEREGON_PREFIX_RE.search(text):
         return True
-    return bool(_HAUL_SEP_RE.search(text))
+    if not _DASH_RE.search(text):
+        return False
+    if _is_known_single_station(text):
+        return False
+    norm = normalize_peregon(text)
+    if norm and _DASH_RE.search(norm):
+        return True
+    if _HAUL_SEP_RE.search(text):
+        return True
+    parts = _DASH_RE.split(text, maxsplit=1)
+    return len(parts) == 2 and all(p.strip() for p in parts)
 
 
 def _strip_station_prefix(value: str) -> str:
@@ -50,7 +71,7 @@ def extract_single_location(*texts: str | None) -> str | None:
         if not raw:
             continue
 
-        if is_peregon_haul(raw) and _HAUL_SEP_RE.search(_strip_station_prefix(raw)):
+        if is_peregon_haul(raw):
             continue
 
         stripped = _strip_station_prefix(raw)
@@ -112,5 +133,5 @@ def format_location_for_table(
     if uchastok:
         return _strip_station_prefix(uchastok)
     if peregon:
-        return format_peregon_display(peregon) if _HAUL_SEP_RE.search(peregon) else _strip_station_prefix(peregon)
+        return format_peregon_display(peregon) if is_peregon_haul(peregon) else _strip_station_prefix(peregon)
     return ""

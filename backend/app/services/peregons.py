@@ -86,9 +86,8 @@ def normalize_peregon(value: str | None) -> str | None:
         if expanded in _CANONICAL_BY_KEY:
             return _CANONICAL_BY_KEY[expanded]
 
-    normalized = re.sub(r"\s*[-–—]\s*", " — ", fixed.strip())
-    normalized = re.sub(r"\s+", " ", normalized)
-    return normalized
+    compact = re.sub(r"\s*[-–—]\s*", "-", fixed.strip())
+    return re.sub(r"\s+", " ", compact)
 
 
 def peregon_names_for_prompt() -> str:

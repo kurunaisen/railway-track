@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.models import AudioFile, ProcessingJob
@@ -20,6 +23,8 @@ from app.services.transcript_crypto import decrypt_transcript_text
 from app.services.inspection_repository import FlatInspectionRow, load_active_job, load_flat_rows, load_latest_done_job
 from app.services.inspection_form import build_form_rows
 from app.services.wide_table import build_wide_rows
+
+logger = logging.getLogger(__name__)
 
 
 def _derive_status(audio: AudioFile, active: ProcessingJob | None, done: ProcessingJob | None) -> str:
@@ -147,7 +152,12 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
                 for s in sorted(done.transcript.segments, key=lambda x: x.segment_index)
             ]
         meta = done.get_pipeline_metadata()
-        logical_blocks = [LogicalBlockOut(**b) for b in meta.get("logical_blocks", [])]
+        logical_blocks = []
+        for block in meta.get("logical_blocks", []):
+            try:
+                logical_blocks.append(LogicalBlockOut(**block))
+            except (ValidationError, TypeError) as exc:
+                logger.warning("Skip invalid logical block for job %s: %s", done.id, exc)
         file_metadata = meta.get("file_metadata", {})
         parse_errors = meta.get("parse_errors", [])
         validation_warnings = [e for e in parse_errors if e.get("severity") == "warning"]
@@ -163,7 +173,10 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
 
     structured = None
     if done and done.inspection_records:
-        structured = StructuredRecordsOut(**load_structured_records(done))
+        try:
+            structured = StructuredRecordsOut(**load_structured_records(done))
+        except ValidationError as exc:
+            logger.warning("Skip invalid structured records for job %s: %s", done.id, exc)
 
     return AudioSessionOut(
         id=audio.id,
