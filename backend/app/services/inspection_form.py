@@ -120,7 +120,7 @@ def resolve_track_parts(rec: FormRowSource) -> tuple[str | None, str | None, str
     switch_display = f"стр.п. {switch_num}" if switch_num else None
 
     kinds: list[str] = []
-    if path_display:
+    if path_display or _is_peregon_context(rec, *sources):
         kinds.append("путь")
     if switch_display:
         kinds.append("стрелочный перевод")

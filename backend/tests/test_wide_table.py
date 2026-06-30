@@ -53,6 +53,17 @@ def test_path_and_switch_together():
     assert format_object_kind(rec) == "путь, стрелочный перевод"
 
 
+def test_peregon_without_path_number_still_path_object():
+    rec = Rec(
+        peregon="Магнетиты — Шонгуй",
+        km="1419",
+        piket="8",
+        raw_text="Перегон магнитит и шон 1419 км пикет 8 уширение рельсовой колеи",
+    )
+    assert format_path(rec) is None
+    assert format_object_kind(rec) == "путь"
+
+
 def test_wide_table_columns():
     rec = Rec(
         peregon="Кица — Блокпост 1381 км",
