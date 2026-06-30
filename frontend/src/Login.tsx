@@ -40,7 +40,7 @@ export default function Login({ onSuccess, authRequired }: Props) {
   return (
     <div className="login-panel">
       <h2>Вход в систему</h2>
-      <p className="hint">Windows · браузер · серверная обработка аудио</p>
+      <p className="hint">Серверная обработка аудио · защищённый доступ</p>
       <form onSubmit={handleSubmit} className="login-form">
         <label>
           Логин

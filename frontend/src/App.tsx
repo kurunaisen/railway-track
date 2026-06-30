@@ -16,6 +16,30 @@ import { type AuthUser, checkHealth, clearAuth, getUser } from "./auth";
 import { healthUrl } from "./config";
 import Login from "./Login";
 
+function LogoMark() {
+  return (
+    <div className="logo-mark" aria-hidden>
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M4 22 L16 6 L28 22"
+          stroke="url(#goldGrad)"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path d="M8 22 H24" stroke="#00eaff" strokeWidth="1.8" strokeLinecap="round" opacity="0.85" />
+        <circle cx="16" cy="18" r="2" fill="#f0d060" />
+        <defs>
+          <linearGradient id="goldGrad" x1="4" y1="6" x2="28" y2="22">
+            <stop stopColor="#f0d060" />
+            <stop offset="1" stopColor="#d4af37" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  );
+}
+
 async function pollUntilDone(jobId: number, sessionId: number): Promise<AudioSession> {
   for (let i = 0; i < 600; i++) {
     const job = await getJob(jobId);
@@ -186,7 +210,8 @@ export default function App() {
   if (authRequired === null) {
     return (
       <div className="app loading-screen">
-        <p>Загрузка…</p>
+        <div className="loader" aria-hidden />
+        <p>Загрузка системы…</p>
         {error ? (
           <div className="error" style={{ maxWidth: 520, marginTop: 16, textAlign: "left" }}>
             {error}
@@ -206,7 +231,7 @@ export default function App() {
         <header className="header">
           <div className="header-inner">
             <div className="logo">
-              <span className="logo-icon">🛤</span>
+              <LogoMark />
               <div>
                 <h1>Обход пути</h1>
                 <p>Защищённый доступ</p>
@@ -231,7 +256,7 @@ export default function App() {
       <header className="header">
         <div className="header-inner">
           <div className="logo">
-            <span className="logo-icon">🛤</span>
+            <LogoMark />
             <div>
               <h1>Обход пути</h1>
               <p>Распознавание речевых описаний состояния пути</p>
@@ -528,7 +553,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        React + Tailwind · FastAPI · PostgreSQL · Redis/Celery · MinIO · Whisper/Yandex · GPT/Claude
+        <span>Railway Track Inspection</span> · React · FastAPI · Yandex ASR · GPT
       </footer>
     </div>
   );
