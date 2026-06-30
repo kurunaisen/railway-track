@@ -76,6 +76,41 @@ def test_speed_only_not_in_defect_column():
     assert form_rows[0]["Ограничение скорости"] == "60 км/ч"
 
 
+def test_llm_orphan_speed_dropped_when_gauge_has_norm_speed():
+    """LLM: defect на станции + speed_limit item с перегоном → одна строка с V огр."""
+    llm_rows = [
+        ParsedRecord(
+            uchastok="Магнетиты",
+            put="5",
+            defect="уширение рельсовой колеи",
+            value="1543",
+            unit="мм",
+            logical_record_index=3,
+            position_index=0,
+            position_type="defect",
+            raw_text="уширение колеи 1543",
+        ),
+        ParsedRecord(
+            peregon="Шонгуй-Магнетиты",
+            speed_limit="60",
+            value="60",
+            unit="км/ч",
+            logical_record_index=3,
+            position_index=1,
+            position_type="speed_limit",
+            parameter="Ограничение скорости",
+            raw_text="60 км/ч",
+        ),
+    ]
+    rows = normalize_all(llm_rows)
+    assert len(rows) == 1
+    assert rows[0].defect
+    assert rows[0].speed_limit == "60"
+    form = record_to_form_row(rows[0], 1)
+    assert form["Ограничение скорости"] == "60 км/ч"
+    assert form["Выявленная неисправность"]
+
+
 LAPLANDIA_TEXT = (
     "Перегон лапландия пулозеро путь 2 главный километр 1353 пикет 2 "
     "неисправность уширение рельсовой колеи 1543 мм ограничение скорости 60."

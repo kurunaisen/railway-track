@@ -161,6 +161,40 @@ def _merge_pending_speed(
     return pending_speed
 
 
+def _merge_speed_into_logical_peers(
+    result: list[ParsedRecord],
+    speed_row: ParsedRecord,
+) -> bool:
+    """V огр. → строка с неисправностью той же logical_record_index (LLM часто путает перегон/станцию)."""
+    idx = speed_row.logical_record_index
+    if idx is None:
+        return False
+    for row in reversed(result):
+        if row.logical_record_index != idx:
+            continue
+        if _has_real_issue(row):
+            if not row.speed_limit:
+                row.speed_limit = speed_row.speed_limit
+            return True
+    return False
+
+
+def drop_orphan_speed_rows(records: list[ParsedRecord]) -> list[ParsedRecord]:
+    """Строка только с V огр. без неисправности — лишняя, если в той же записи уже есть дефект."""
+    by_idx: dict[int | None, list[ParsedRecord]] = {}
+    for record in records:
+        by_idx.setdefault(record.logical_record_index, []).append(record)
+
+    drop: set[int] = set()
+    for group in by_idx.values():
+        if not any(_has_real_issue(r) for r in group):
+            continue
+        for record in group:
+            if not _has_real_issue(record) and record.speed_limit:
+                drop.add(id(record))
+    return [r for r in records if id(r) not in drop]
+
+
 def reconcile_speed_limit_rows(records: list[ParsedRecord]) -> list[ParsedRecord]:
     """Скорость — в столбец ограничения, при необходимости на строку с неисправностью."""
     if not records:
@@ -173,6 +207,8 @@ def reconcile_speed_limit_rows(records: list[ParsedRecord]) -> list[ParsedRecord
         apply_speed_limit_fields(record)
 
         if is_speed_limit_only_record(record):
+            if _merge_speed_into_logical_peers(result, record):
+                continue
             if result and _same_record_context(result[-1], record):
                 pending_speed = record.speed_limit or pending_speed
                 continue
@@ -204,4 +240,4 @@ def reconcile_speed_limit_rows(records: list[ParsedRecord]) -> list[ParsedRecord
 
     pending_speed = _merge_pending_speed(result, pending_speed, records[-1])
 
-    return result
+    return drop_orphan_speed_rows(result)

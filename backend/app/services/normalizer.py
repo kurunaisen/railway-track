@@ -6,7 +6,7 @@ import re
 
 from app.services.km_parse import merge_hesitated_km_value
 from app.services.parser import ParsedRecord
-from app.services.speed_limit import reconcile_speed_limit_rows
+from app.services.speed_limit import reconcile_speed_limit_rows, drop_orphan_speed_rows
 from app.services.rail_side import (
     extract_rail_side,
     extract_rail_side_note,
@@ -241,11 +241,18 @@ def _merge_speed_within_logical_records(records: list[ParsedRecord]) -> list[Par
     result: list[ParsedRecord] = []
     for group in groups.values():
         speed = next((r.speed_limit for r in group if r.speed_limit), None)
-        if speed:
-            for record in group:
-                if record.defect and not record.speed_limit:
-                    record.speed_limit = speed
-        result.extend(group)
+        has_defect = any(r.defect for r in group)
+        for record in group:
+            if record.defect and not record.speed_limit and speed:
+                record.speed_limit = speed
+            if (
+                has_defect
+                and not record.defect
+                and not (record.parameter and record.parameter.strip())
+                and record.speed_limit
+            ):
+                continue
+            result.append(record)
     return result
 
 
@@ -299,4 +306,5 @@ def normalize_all(
     records = _drop_location_only_rows(records)
     records = _merge_speed_within_logical_records(records)
     records = [normalize_record(r) for r in records]
-    return apply_track_norms_all(records)
+    records = apply_track_norms_all(records)
+    return drop_orphan_speed_rows(records)
