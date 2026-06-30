@@ -11,6 +11,10 @@ if TYPE_CHECKING:
 _SPEED_EXTRACT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"ограничени[ея]\s+скорост(?:и|ь)?\s*(?:до\s*)?(\d+)", re.IGNORECASE),
     re.compile(
+        r"ограничени[ея]\s+(\d+)\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час)?",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"скорост(?:ь|и)\s*(?:не\s*более|до|ограничена|ограничено)\s*(\d+)",
         re.IGNORECASE,
     ),
@@ -25,14 +29,14 @@ _SPEED_PHRASE_RE = re.compile(
     r"(?:"
     r"ограничени[ея]\s+скорост(?:и|ь)?(?:\s+до\s*)?\s*\d+(?:\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час))?"
     r"|"
+    r"ограничени[ея]\s+\d+(?:\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час))?"
+    r"|"
     r"скорост(?:ь|и)\s+(?:не\s+более|не\s+выше|до|ограничена|ограничено)?\s*\d+(?:\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час))?"
     r"|"
     r"\d+\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час)\b"
     r")",
     re.IGNORECASE,
 )
-
-_SPEED_PARAM_RE = re.compile(r"ограничени[ея]\s+скорост(?:и|ь)?|\bскорост(?:ь|и)\b", re.IGNORECASE)
 
 
 def extract_speed_limit(text: str | None) -> str | None:
@@ -52,27 +56,51 @@ def strip_speed_limit_phrases(text: str | None) -> str:
     return re.sub(r"\s+", " ", cleaned).strip(" ,.;:-")
 
 
+def format_speed_limit_display(value: str | None) -> str | None:
+    """Для столбца таблицы: «60 км/ч»."""
+    if not value:
+        return None
+    text = value.strip()
+    match = re.search(r"(\d+)", text)
+    if not match:
+        return text
+    number = match.group(1)
+    if re.search(r"км\s*/?\s*ч|километр(?:ов)?\s*в\s*час", text, re.IGNORECASE):
+        return re.sub(r"\s+", " ", text).strip()
+    return f"{number} км/ч"
+
+
 def is_speed_parameter(name: str | None) -> bool:
     if not name:
         return False
     lowered = name.strip().lower()
     if "огранич" in lowered and "скорост" in lowered:
         return True
-    return lowered in {"скорость", "ограничение скорости", "v огр.", "v огр"}
+    if lowered.startswith("огранич") and re.search(r"\d", lowered):
+        return True
+    return lowered in {"скорость", "ограничение скорости", "ограничение", "v огр.", "v огр"}
+
+
+def _speed_text_sources(record: ParsedRecord) -> str:
+    parts = [record.raw_text, record.defect, record.parameter, record.comment]
+    return " ".join(part.strip() for part in parts if part and part.strip())
 
 
 def apply_speed_limit_fields(record: ParsedRecord) -> None:
     """Извлекает скорость из текста в speed_limit и убирает её из неисправности."""
-    for source in (record.raw_text, record.defect, record.parameter):
-        speed = extract_speed_limit(source)
-        if speed:
-            record.speed_limit = record.speed_limit or speed
-            break
+    speed = extract_speed_limit(_speed_text_sources(record))
+    if speed:
+        record.speed_limit = record.speed_limit or speed
 
     if record.defect:
         cleaned = strip_speed_limit_phrases(record.defect).strip()
         if is_speed_parameter(record.defect) or not cleaned:
             record.defect = cleaned or None
+
+    if record.raw_text:
+        cleaned_raw = strip_speed_limit_phrases(record.raw_text).strip(" ,.;:-")
+        if cleaned_raw != record.raw_text:
+            record.raw_text = cleaned_raw or record.raw_text
 
     if record.parameter and is_speed_parameter(record.parameter):
         record.parameter = None

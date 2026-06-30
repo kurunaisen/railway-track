@@ -13,6 +13,8 @@ def test_extract_plain_speed_phrase():
     assert extract_speed_limit("скорость 60 км/ч") == "60"
     assert extract_speed_limit("скорость 60") == "60"
     assert extract_speed_limit("ограничение скорости 40") == "40"
+    assert extract_speed_limit("ограничение 60") == "60"
+    assert extract_speed_limit("ограничение 60 км/ч") == "60"
     assert extract_speed_limit("скорость не более 25 км/ч") == "25"
 
 
@@ -36,7 +38,7 @@ def test_plain_speed_phrase_in_column():
     assert row.speed_limit == "60"
     form = record_to_form_row(row, 1)
     assert form["Выявленная неисправность"] == "износ 5 мм"
-    assert form["Ограничение скорости"] == "60"
+    assert form["Ограничение скорости"] == "60 км/ч"
 
 
 def test_speed_only_not_in_defect_column():
@@ -71,7 +73,63 @@ def test_speed_only_not_in_defect_column():
 
     _, form_rows = build_form_rows(merged)
     assert form_rows[0]["Выявленная неисправность"] == "износ 5 мм"
-    assert form_rows[0]["Ограничение скорости"] == "60"
+    assert form_rows[0]["Ограничение скорости"] == "60 км/ч"
+
+
+LAPLANDIA_TEXT = (
+    "Перегон лапландия пулозеро путь 2 главный километр 1353 пикет 2 "
+    "неисправность уширение рельсовой колеи 1543 мм ограничение скорости 60."
+)
+
+LAPLANDIA_TEXT_SHORT = (
+    "Перегон лапландия пулозеро путь 2 главный километр 1353 пикет 2 "
+    "неисправность уширение рельсовой колеи 1543 мм ограничение 60."
+)
+
+
+def test_laplandia_speed_in_column():
+    rows = normalize_all(run_parsing_pipeline(LAPLANDIA_TEXT).records)
+    row = next(r for r in rows if r.defect or r.speed_limit)
+    assert row.speed_limit == "60"
+    form = record_to_form_row(row, 1)
+    assert form["Ограничение скорости"] == "60 км/ч"
+    assert "огранич" not in (form["Выявленная неисправность"] or "").lower()
+
+
+def test_laplandia_short_limit_phrase():
+    rows = normalize_all(run_parsing_pipeline(LAPLANDIA_TEXT_SHORT).records)
+    row = next(r for r in rows if r.defect or r.speed_limit)
+    assert row.speed_limit == "60"
+    form = record_to_form_row(row, 1)
+    assert form["Ограничение скорости"] == "60 км/ч"
+
+
+def test_llm_defect_with_embedded_speed():
+    from app.services.llm.json_schema import structured_to_parsed_rows
+
+    data = {
+        "records": [
+            {
+                "sequence_number": 1,
+                "haul_name": "Лапландия-Пулозеро",
+                "track_number": "2",
+                "km_value": "1353",
+                "picket_value": "2",
+                "items": [
+                    {
+                        "order_in_record": 1,
+                        "position_type": "defect",
+                        "defect_text": "уширение рельсовой колеи 1543 мм ограничение скорости 60",
+                    }
+                ],
+            }
+        ]
+    }
+    rows = normalize_all(structured_to_parsed_rows(data))
+    assert rows[0].speed_limit == "60"
+    form = record_to_form_row(rows[0], 1)
+    assert form["Ограничение скорости"] == "60 км/ч"
+    assert "огранич" not in (form["Выявленная неисправность"] or "").lower()
 
 
 def test_speed_not_duplicated_as_defect():

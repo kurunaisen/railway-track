@@ -69,6 +69,8 @@ _SPEED_LIMIT_ANCHOR_RE = re.compile(
     r"(?:"
     r"ограничени[ея]\s+скорост(?:и|ь)?(?:\s+до\s*)?\s*\d+(?:\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час))?"
     r"|"
+    r"ограничени[ея]\s+\d+(?:\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час))?"
+    r"|"
     r"скорост(?:ь|и)\s+(?:не\s+более|не\s+выше|до|ограничена|ограничено)?\s*\d+(?:\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час))?"
     r"|"
     r"скорост(?:ь|и)\s+\d+\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час)?"
@@ -275,7 +277,10 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
                 )
 
     sp = extract_speed_limit(normalized)
-    if sp and re.search(r"\bскорост(?:ь|и)\s+\d+", normalized, re.IGNORECASE):
+    if sp and (
+        re.search(r"\bскорост(?:ь|и)\s+\d+", normalized, re.IGNORECASE)
+        or re.search(r"ограничени[ея]\s+\d+", normalized, re.IGNORECASE)
+    ):
         if not _extract_defect(normalized) and not _extract_parameter(normalized):
             return PositionItem(
                 position_index=position_index,

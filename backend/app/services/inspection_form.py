@@ -7,7 +7,7 @@ from typing import Protocol
 
 from app.services.locations import format_location_for_table, is_peregon_haul
 from app.services.rail_side import extract_rail_side_note, is_rail_side_only_fragment
-from app.services.speed_limit import is_speed_parameter, strip_speed_limit_phrases
+from app.services.speed_limit import format_speed_limit_display, is_speed_parameter, strip_speed_limit_phrases
 
 FORM_COLUMNS: tuple[str, ...] = (
     "Nп/п",
@@ -196,7 +196,7 @@ def record_to_form_row(rec: FormRowSource, index: int) -> dict[str, str | int | 
         FORM_COLUMNS[2]: format_track(rec) or None,
         FORM_COLUMNS[3]: format_binding(rec) or None,
         FORM_COLUMNS[4]: format_defect(rec) or None,
-        FORM_COLUMNS[5]: (rec.speed_limit or "").strip() or None,
+        FORM_COLUMNS[5]: format_speed_limit_display(rec.speed_limit),
         FORM_COLUMNS[6]: format_note(rec) or None,
     }
 

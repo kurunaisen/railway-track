@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from app.services.parser import ParsedRecord
+from app.services.speed_limit import apply_speed_limit_fields
 from app.services.peregons import peregon_names_for_prompt
 from app.services.stations import station_names_for_prompt
 
@@ -163,14 +165,22 @@ def structured_to_parsed_rows(data: dict) -> list[ParsedRecord]:
                     value=value,
                     unit=unit,
                     speed_limit=str(speed) if ptype == "speed_limit" and speed else None,
-                    raw_text=item.get("raw_text") or rec.get("source_text") or "",
+                    raw_text=item.get("raw_text")
+                    or rec.get("source_text")
+                    or item.get("defect_text")
+                    or "",
                 )
             )
+    for row in rows:
+        apply_speed_limit_fields(row)
     return rows
 
 
 def _infer_position_type(item: dict) -> str:
-    if item.get("speed_limit") or "скорост" in (item.get("parameter_name") or "").lower():
+    pname = (item.get("parameter_name") or item.get("canonical_parameter") or "").lower()
+    if item.get("speed_limit") or "скорост" in pname:
+        return "speed_limit"
+    if pname.startswith("огранич") and re.search(r"\d", pname):
         return "speed_limit"
     if item.get("defect_text"):
         return "defect"
