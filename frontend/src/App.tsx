@@ -4,7 +4,7 @@ import {
   PIPELINE_STEPS,
   canEdit,
   confirmSession,
-  downloadSessionExcel,
+  downloadBatchExcel,
   fieldLabel,
   formatTime,
   getJob,
@@ -19,6 +19,7 @@ import { type AuthUser, checkHealth, clearAuth, fetchMe, getUser } from "./auth"
 import { healthUrl } from "./config";
 import Login from "./Login";
 import { APP_BRAND_ACCENT, APP_BRAND_MAIN, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
+import { pickTableView } from "./mergeSessions";
 import { AccountPanel } from "./profile/AccountPanel";
 import { ProfileAvatar } from "./profile/ProfileAvatar";
 
@@ -249,6 +250,9 @@ export default function App() {
         setSession(target);
         await runProcess(target, { index: i + 1, total: pending.length });
       }
+      const refreshed = await Promise.all(uploadBatch.map((s) => getSession(s.id)));
+      setUploadBatch(refreshed);
+      setSession(refreshed[refreshed.length - 1] ?? null);
     } catch {
       // runProcess уже выставил error
     } finally {
@@ -339,10 +343,11 @@ export default function App() {
   };
 
   const handleExcelDownload = async () => {
-    if (!session) return;
+    const view = pickTableView(session, uploadBatch);
+    if (!view || view.session_ids.length === 0) return;
     setLoading(true);
     try {
-      await downloadSessionExcel(session.id);
+      await downloadBatchExcel(view.session_ids);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка выгрузки Excel");
     } finally {
@@ -389,22 +394,24 @@ export default function App() {
     );
   }
 
+  const mergedTable = pickTableView(session, uploadBatch);
+
   const disputedCount =
-    session?.records.reduce((n, r) => n + (r.disputed_fields?.length ?? 0), 0) ?? 0;
+    mergedTable?.records.reduce((n, r) => n + (r.disputed_fields?.length ?? 0), 0) ?? 0;
 
   const disputedRows =
-    session?.records
+    mergedTable?.records
       .map((r, i) => ({ row: i, record: r }))
       .filter(({ record }) => (record.disputed_fields?.length ?? 0) > 0) ?? [];
 
   const unknownTerms =
-    session?.unknown_terms.filter((t) => (t.term || "").trim()) ?? [];
+    mergedTable?.unknown_terms.filter((t) => (t.term || "").trim()) ?? [];
 
   const hasWarningsPanel =
-    !!session &&
+    !!mergedTable &&
     (disputedRows.length > 0 ||
-      (session.validation_warnings?.length ?? 0) > 0 ||
-      (session.parse_errors?.length ?? 0) > 0 ||
+      (mergedTable.validation_warnings?.length ?? 0) > 0 ||
+      (mergedTable.parse_errors?.length ?? 0) > 0 ||
       unknownTerms.length > 0);
 
   const pendingUploadCount = uploadBatch.filter((s) => s.status === "uploaded").length;
@@ -594,14 +601,19 @@ export default function App() {
           </section>
         )}
 
-        {session && session.records.length > 0 && (
+        {mergedTable && mergedTable.records.length > 0 && (
           <section className="panel carbon-panel table-panel">
             <div className="table-header">
               <h2>
                 {adminView
-                  ? `Шаг 9: Построчная таблица (${session.positions_count || session.records.length} позиций)`
-                  : `Таблица результатов (${session.positions_count || session.records.length} поз.)`}
+                  ? `Шаг 9: Построчная таблица (${mergedTable.positions_count} позиций)`
+                  : `Таблица результатов (${mergedTable.positions_count} поз.)`}
               </h2>
+              {mergedTable.session_ids.length > 1 && (
+                <p className="hint table-batch-hint">
+                  Объединено из {mergedTable.session_ids.length} записей: {mergedTable.source_names.join(", ")}
+                </p>
+              )}
               <div className="table-actions">
                 <div className="view-toggle">
                   <button
@@ -625,9 +637,9 @@ export default function App() {
                     <button
                       className="btn btn-success"
                       onClick={handleConfirm}
-                      disabled={loading || session.confirmed}
+                      disabled={loading || !session || session.confirmed}
                     >
-                      {session.confirmed ? "✓ Подтверждено" : "Подтвердить"}
+                      {session?.confirmed ? "✓ Подтверждено" : "Подтвердить"}
                     </button>
                   </>
                 )}
@@ -639,20 +651,20 @@ export default function App() {
             {!editable && <p className="hint">Режим просмотра (viewer).</p>}
             <div className="table-layout">
               <div className="table-main">
-                {tableView === "wide" && session.records_wide ? (
+                {tableView === "wide" && mergedTable.records_wide ? (
                   <div className="table-wrap">
                     <table>
                       <thead>
                         <tr>
-                          {session.records_wide.columns.map((c) => (
+                          {mergedTable.records_wide.columns.map((c) => (
                             <th key={c}>{c}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {session.records_wide.rows.map((row, i) => (
+                        {mergedTable.records_wide.rows.map((row, i) => (
                           <tr key={i}>
-                            {session.records_wide!.columns.map((c) => (
+                            {mergedTable.records_wide!.columns.map((c) => (
                               <td key={c}>{row[c] ?? "—"}</td>
                             ))}
                           </tr>
@@ -660,20 +672,20 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
-                ) : session.records_form ? (
+                ) : mergedTable.records_form ? (
                   <div className="table-wrap">
                     <table>
                       <thead>
                         <tr>
-                          {session.records_form.columns.map((c) => (
+                          {mergedTable.records_form.columns.map((c) => (
                             <th key={c}>{c}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {session.records_form.rows.map((row, i) => (
+                        {mergedTable.records_form.rows.map((row, i) => (
                           <tr key={i}>
-                            {session.records_form!.columns.map((c) => (
+                            {mergedTable.records_form!.columns.map((c) => (
                               <td key={c}>{row[c] ?? "—"}</td>
                             ))}
                           </tr>
@@ -687,7 +699,7 @@ export default function App() {
                   </p>
                 )}
               </div>
-              {(session.records_wide || session.records_form) && (
+              {(mergedTable.records_wide || mergedTable.records_form) && (
                 <aside className="table-aside" aria-hidden>
                   <img src="/surprise.png" alt="" className="table-aside-art" />
                 </aside>
@@ -721,11 +733,11 @@ export default function App() {
                 </ul>
               </div>
             )}
-            {session!.validation_warnings.length > 0 && (
+            {mergedTable && mergedTable.validation_warnings.length > 0 && (
               <div className="meta-block">
-                <h3>Валидация ({session!.validation_warnings.length})</h3>
+                <h3>Валидация ({mergedTable.validation_warnings.length})</h3>
                 <ul>
-                  {session!.validation_warnings.map((w, i) => (
+                  {mergedTable.validation_warnings.map((w, i) => (
                     <li key={i}>
                       {w.row != null && w.row >= 0 ? `Строка ${w.row + 1}: ` : ""}
                       {issueText(w)}
@@ -734,11 +746,11 @@ export default function App() {
                 </ul>
               </div>
             )}
-            {session!.parse_errors.length > 0 && (
+            {mergedTable && mergedTable.parse_errors.length > 0 && (
               <div className="meta-block">
-                <h3>Ошибки разбора ({session!.parse_errors.length})</h3>
+                <h3>Ошибки разбора ({mergedTable.parse_errors.length})</h3>
                 <ul>
-                  {session!.parse_errors.map((e, i) => (
+                  {mergedTable.parse_errors.map((e, i) => (
                     <li key={i}>
                       {e.row != null && e.row >= 0 ? `Строка ${e.row + 1}: ` : "Общее: "}
                       {issueText(e)}

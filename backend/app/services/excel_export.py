@@ -20,42 +20,93 @@ HEADER_FONT = Font(color="FFFFFF", bold=True)
 
 def export_session_to_excel(db: Session, session_id: int) -> BytesIO:
     """session_id = audio_files.id."""
-    audio = db.query(AudioFile).filter(AudioFile.id == session_id).first()
-    if not audio:
-        raise ValueError("Session not found")
+    return export_sessions_batch_to_excel(db, [session_id])
 
-    job = load_latest_done_job(db, session_id)
-    if not job:
+
+def export_sessions_batch_to_excel(db: Session, session_ids: list[int]) -> BytesIO:
+    if not session_ids:
+        raise ValueError("Не указаны сессии для экспорта")
+
+    all_records = []
+    transcript_frames = []
+    all_errors: list[dict] = []
+    all_terms: list[dict] = []
+    export_job_id: int | None = None
+
+    for session_id in session_ids:
+        audio = db.query(AudioFile).filter(AudioFile.id == session_id).first()
+        if not audio:
+            continue
+        job = load_latest_done_job(db, session_id)
+        if not job:
+            continue
+        export_job_id = export_job_id or job.id
+        records = load_flat_rows(job, session_id)
+        all_records.extend(records)
+        transcript_frames.append(_sheet_raw_transcripts(session_id, audio, job))
+        session_view = audio_file_to_session_out(db, audio)
+        for err in session_view.parse_errors:
+            all_errors.append({**err, "session_id": session_id})
+        for term in session_view.unknown_terms:
+            all_terms.append({**term, "session_id": session_id})
+
+    if not all_records:
         raise ValueError("Нет обработанных данных для экспорта")
-
-    records = load_flat_rows(job, session_id)
-    session_view = audio_file_to_session_out(db, audio)
 
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        _sheet_records_form(records).to_excel(writer, sheet_name="Таблица", index=False)
-        _sheet_raw_transcripts(session_id, audio, job).to_excel(writer, sheet_name="raw_transcripts", index=False)
-        _sheet_records_long(records).to_excel(writer, sheet_name="records_long", index=False)
-        _sheet_records_wide(records).to_excel(writer, sheet_name="records_wide", index=False)
-        _sheet_errors(session_id, session_view.parse_errors).to_excel(writer, sheet_name="errors", index=False)
-        _sheet_unknown_terms(session_id, session_view.unknown_terms).to_excel(
-            writer, sheet_name="unknown_terms", index=False
+        _sheet_records_form(all_records).to_excel(writer, sheet_name="Таблица", index=False)
+        pd.concat(transcript_frames, ignore_index=True).to_excel(
+            writer, sheet_name="raw_transcripts", index=False
+        ) if transcript_frames else pd.DataFrame().to_excel(
+            writer, sheet_name="raw_transcripts", index=False
         )
+        _sheet_records_long(all_records).to_excel(writer, sheet_name="records_long", index=False)
+        _sheet_records_wide(all_records).to_excel(writer, sheet_name="records_wide", index=False)
+        pd.DataFrame(
+            [
+                {
+                    "session_id": e.get("session_id"),
+                    "row": e.get("row"),
+                    "field": e.get("field"),
+                    "error": e.get("error") or e.get("message"),
+                    "text_fragment": e.get("text"),
+                    "severity": e.get("severity"),
+                }
+                for e in all_errors
+            ]
+        ).to_excel(writer, sheet_name="errors", index=False)
+        pd.DataFrame(
+            [
+                {
+                    "session_id": t.get("session_id"),
+                    "term": t.get("term"),
+                    "count": t.get("count"),
+                }
+                for t in all_terms
+            ]
+        ).to_excel(writer, sheet_name="unknown_terms", index=False)
 
         for name in writer.sheets:
             _style_sheet(writer.sheets[name])
 
     buffer.seek(0)
 
-    db.add(
-        Export(
-            job_id=job.id,
-            file_path=f"railway_session_{session_id}.xlsx",
-            format="xlsx",
-            created_at=datetime.utcnow(),
+    if export_job_id:
+        label = (
+            f"railway_session_{session_ids[0]}.xlsx"
+            if len(session_ids) == 1
+            else f"railway_batch_{len(session_ids)}_sessions.xlsx"
         )
-    )
-    db.commit()
+        db.add(
+            Export(
+                job_id=export_job_id,
+                file_path=label,
+                format="xlsx",
+                created_at=datetime.utcnow(),
+            )
+        )
+        db.commit()
     return buffer
 
 

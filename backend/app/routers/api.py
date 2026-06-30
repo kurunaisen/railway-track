@@ -12,7 +12,7 @@ from typing import Annotated, Union
 
 
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 
 from fastapi.responses import StreamingResponse
 
@@ -51,7 +51,7 @@ from app.schemas import (
 
 from app.services.audit import log_action
 
-from app.services.excel_export import export_session_to_excel
+from app.services.excel_export import export_session_to_excel, export_sessions_batch_to_excel
 
 from app.services.inspection_repository import (
     apply_flat_update,
@@ -851,6 +851,78 @@ def confirm_session(
     log_action(db, action="session_confirm", current=current, request=request, resource_type="session", resource_id=session_id)
 
     return {"ok": True, "message": "Результат подтверждён"}
+
+
+
+
+
+@router.get("/sessions/export-batch")
+
+def export_excel_batch(
+
+    request: Request,
+
+    session_ids: str = Query(..., description="ID сессий через запятую"),
+
+    db: Session = Depends(get_db),
+
+    current: CurrentUser = Depends(get_current_user),
+
+):
+
+    ids = [int(part.strip()) for part in session_ids.split(",") if part.strip().isdigit()]
+
+    if not ids:
+
+        raise HTTPException(status_code=400, detail="Укажите session_ids")
+
+    for session_id in ids:
+
+        _audio_or_404(db, session_id, current)
+
+    try:
+
+        buffer = export_sessions_batch_to_excel(db, ids)
+
+    except ValueError as exc:
+
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    except Exception as exc:
+
+        logger.exception("Excel batch export failed for sessions %s", ids)
+
+        raise HTTPException(status_code=422, detail=f"Ошибка экспорта Excel: {exc}") from exc
+
+
+
+    log_action(
+
+        db,
+
+        action="export_excel",
+
+        current=current,
+
+        request=request,
+
+        resource_type="session_batch",
+
+        resource_id=",".join(str(i) for i in ids),
+
+    )
+
+    filename = f"railway_batch_{len(ids)}_sessions.xlsx" if len(ids) > 1 else f"railway_session_{ids[0]}.xlsx"
+
+    return StreamingResponse(
+
+        buffer,
+
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+
+    )
 
 
 

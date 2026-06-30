@@ -247,6 +247,25 @@ export async function downloadSessionExcel(sessionId: number): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadBatchExcel(sessionIds: number[]): Promise<void> {
+  if (sessionIds.length === 0) return;
+  if (sessionIds.length === 1) {
+    await downloadSessionExcel(sessionIds[0]);
+    return;
+  }
+  const query = encodeURIComponent(sessionIds.join(","));
+  const res = await apiFetch(`${API}/sessions/export-batch?session_ids=${query}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `railway_batch_${sessionIds.length}_sessions.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function formatTime(seconds: number | null): string {
   if (seconds == null) return "—";
   const m = Math.floor(seconds / 60);

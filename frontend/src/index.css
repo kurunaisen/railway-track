@@ -262,6 +262,11 @@ body {
   flex-wrap: wrap;
 }
 
+.table-batch-hint {
+  margin-top: 0.35rem;
+  width: 100%;
+}
+
 .upload-batch-list {
   list-style: none;
   display: flex;
