@@ -8,6 +8,7 @@ import {
   formatTime,
   getJob,
   getSession,
+  isAdmin,
   processSession,
   saveSession,
   uploadAudio,
@@ -111,6 +112,7 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([]);
 
   const editable = user ? canEdit(user.role) : false;
+  const adminView = user ? isAdmin(user.role) : false;
 
   useEffect(() => {
     let cancelled = false;
@@ -382,7 +384,7 @@ export default function App() {
           </section>
         )}
 
-        {session?.full_transcript && (
+        {adminView && session?.full_transcript && (
           <section className="panel transcript-panel">
             <h2>Шаг 3–4: ASR и логические блоки</h2>
             {session.logical_blocks.length > 0 && session.records.length > 0 && (
@@ -456,7 +458,9 @@ export default function App() {
           <section className="panel table-panel">
             <div className="table-header">
               <h2>
-                Шаг 9: Построчная таблица ({session.positions_count || session.records.length} позиций)
+                {adminView
+                  ? `Шаг 9: Построчная таблица (${session.positions_count || session.records.length} позиций)`
+                  : `Таблица результатов (${session.positions_count || session.records.length} поз.)`}
               </h2>
               <div className="table-actions">
                 <div className="view-toggle">

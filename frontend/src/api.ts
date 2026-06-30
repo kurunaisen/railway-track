@@ -237,3 +237,7 @@ export const PIPELINE_STEPS = [
 export function canEdit(role: string): boolean {
   return role === "admin" || role === "operator";
 }
+
+export function isAdmin(role: string): boolean {
+  return role === "admin";
+}
