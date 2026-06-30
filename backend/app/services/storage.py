@@ -94,43 +94,65 @@ class S3Storage(StorageBackend):
 
 
 class SupabaseStorage(StorageBackend):
-    """Supabase Storage через REST API (service role)."""
+    """Supabase Storage через REST API (service role), без тяжёлого SDK."""
 
     def __init__(self) -> None:
+        import httpx
+
         if not settings.supabase_url or not settings.supabase_service_role_key:
             raise RuntimeError("SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY обязательны для STORAGE_BACKEND=supabase")
-        from supabase import create_client
 
         self._bucket = settings.supabase_storage_bucket
-        self._client = create_client(settings.supabase_url, settings.supabase_service_role_key)
+        self._base = settings.supabase_url.rstrip("/") + "/storage/v1"
+        self._headers = {
+            "Authorization": f"Bearer {settings.supabase_service_role_key}",
+            "apikey": settings.supabase_service_role_key,
+        }
+        self._client = httpx.Client(timeout=120.0)
         self._ensure_bucket()
 
     def _ensure_bucket(self) -> None:
+        resp = self._client.get(f"{self._base}/bucket/{self._bucket}", headers=self._headers)
+        if resp.status_code == 200:
+            return
         try:
-            self._client.storage.get_bucket(self._bucket)
-        except Exception:
-            try:
-                self._client.storage.create_bucket(self._bucket, options={"public": False})
+            create = self._client.post(
+                f"{self._base}/bucket",
+                headers={**self._headers, "Content-Type": "application/json"},
+                json={"id": self._bucket, "name": self._bucket, "public": False},
+            )
+            if create.status_code in (200, 201):
                 logger.info("Created Supabase bucket %s", self._bucket)
-            except Exception as exc:
-                logger.warning("Could not create Supabase bucket: %s", exc)
+            else:
+                logger.warning("Could not create Supabase bucket: %s %s", create.status_code, create.text[:200])
+        except Exception as exc:
+            logger.warning("Could not create Supabase bucket: %s", exc)
 
     def save(self, content: bytes, key: str) -> str:
-        self._client.storage.from_(self._bucket).upload(
-            path=key,
-            file=content,
-            file_options={"content-type": "application/octet-stream", "upsert": "true"},
+        resp = self._client.post(
+            f"{self._base}/object/{self._bucket}/{key}",
+            headers={
+                **self._headers,
+                "Content-Type": "application/octet-stream",
+                "x-upsert": "true",
+            },
+            content=content,
         )
+        resp.raise_for_status()
         return f"supabase://{self._bucket}/{key}"
 
     def resolve_local_path(self, uri: str) -> Path:
         if uri.startswith("supabase://"):
             _, rest = uri.split("supabase://", 1)
             bucket, key = rest.split("/", 1)
-            data = self._client.storage.from_(bucket).download(key)
+            resp = self._client.get(
+                f"{self._base}/object/{bucket}/{key}",
+                headers=self._headers,
+            )
+            resp.raise_for_status()
             suffix = Path(key).suffix or ".bin"
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-            tmp.write(data)
+            tmp.write(resp.content)
             tmp.close()
             return Path(tmp.name)
         return Path(uri)
@@ -141,7 +163,14 @@ class SupabaseStorage(StorageBackend):
             return
         _, rest = uri.split("supabase://", 1)
         bucket, key = rest.split("/", 1)
-        self._client.storage.from_(bucket).remove([key])
+        resp = self._client.request(
+            "DELETE",
+            f"{self._base}/object/{bucket}",
+            headers={**self._headers, "Content-Type": "application/json"},
+            json={"prefixes": [key]},
+        )
+        if resp.status_code not in (200, 204, 404):
+            resp.raise_for_status()
 
 
 _storage: StorageBackend | None = None
