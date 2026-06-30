@@ -87,6 +87,48 @@ LAPLANDIA_TEXT_SHORT = (
 )
 
 
+def test_parsed_to_item_keeps_speed_on_defect_row():
+    from app.models import InspectionRecord
+    from app.services.inspection_repository import _parsed_to_item
+    from app.services.parser import ParsedRecord
+
+    record = InspectionRecord(job_id=1, sequence_number=1)
+    parsed = ParsedRecord(
+        defect="уширение",
+        value="1543",
+        unit="мм",
+        speed_limit="60",
+        position_type="defect",
+        raw_text="уширение рельсовой колеи 1543 мм",
+    )
+    item = _parsed_to_item(record, parsed, 1)
+    assert item.speed_limit == "60"
+    assert item.defect_text == "уширение"
+
+
+def test_flat_row_form_shows_speed_limit():
+    from app.services.inspection_repository import FlatInspectionRow
+
+    row = FlatInspectionRow(
+        id=1,
+        session_id=1,
+        record_id=1,
+        row_order=0,
+        peregon="Лапландия — Пулозеро",
+        put="2",
+        km="1353",
+        piket="2",
+        defect="уширение",
+        value="1543",
+        unit="мм",
+        speed_limit="60",
+        raw_text="уширение рельсовой колеи 1543 мм",
+    )
+    form = record_to_form_row(row, 1)
+    assert form["Ограничение скорости"] == "60 км/ч"
+    assert form["Выявленная неисправность"] == "уширение 1543 мм"
+
+
 def test_laplandia_speed_in_column():
     rows = normalize_all(run_parsing_pipeline(LAPLANDIA_TEXT).records)
     row = next(r for r in rows if r.defect or r.speed_limit)

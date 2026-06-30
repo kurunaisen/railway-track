@@ -89,6 +89,7 @@ def _parsed_to_item(record: InspectionRecord, parsed: ParsedRecord, order: int) 
             value_text=txt,
             unit=parsed.unit,
             position_type="defect",
+            speed_limit=parsed.speed_limit,
             needs_review=needs_review,
             raw_text=parsed.raw_text,
         )
@@ -101,6 +102,7 @@ def _parsed_to_item(record: InspectionRecord, parsed: ParsedRecord, order: int) 
         value_text=txt,
         unit=parsed.unit,
         position_type=parsed.position_type or "parameter",
+        speed_limit=parsed.speed_limit,
         needs_review=needs_review,
         raw_text=parsed.raw_text,
     )
