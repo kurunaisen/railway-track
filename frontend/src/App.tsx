@@ -469,6 +469,8 @@ export default function App() {
               </table>
             </div>
             ) : (
+              <p className="hint">Нет данных для таблицы. Переобработайте файл после обновления сервера.</p>
+            )}
           </section>
         )}
 
