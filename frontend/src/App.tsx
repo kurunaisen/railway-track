@@ -18,7 +18,7 @@ import {
 import { type AuthUser, checkHealth, clearAuth, getUser } from "./auth";
 import { healthUrl } from "./config";
 import Login from "./Login";
-import { APP_NAME, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
+import { APP_BRAND_ACCENT, APP_BRAND_MAIN, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
 
 function MicIcon() {
   return (
@@ -36,49 +36,25 @@ function StopIcon() {
   );
 }
 
+function BrandTitle() {
+  return (
+    <h1 className="brand-title">
+      {APP_BRAND_MAIN}
+      <span className="text-gold">{APP_BRAND_ACCENT}</span>
+    </h1>
+  );
+}
+
 function LogoMark() {
   return (
     <div className="logo-mark" aria-hidden>
-      <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="logoGold" x1="8" y1="8" x2="48" y2="48">
-            <stop stopColor="#f5dc7a" />
-            <stop offset="0.5" stopColor="#d4af37" />
-            <stop offset="1" stopColor="#9a7b1a" />
-          </linearGradient>
-          <linearGradient id="logoRail" x1="14" y1="38" x2="42" y2="18">
-            <stop stopColor="#e8c547" />
-            <stop offset="1" stopColor="#b8922a" />
-          </linearGradient>
-          <radialGradient id="logoBg" cx="50%" cy="35%" r="65%">
-            <stop stopColor="#222228" />
-            <stop offset="1" stopColor="#0e0e12" />
-          </radialGradient>
-        </defs>
-        <rect x="2" y="2" width="52" height="52" rx="14" fill="url(#logoBg)" stroke="url(#logoGold)" strokeWidth="1.5" />
-        <rect x="2" y="2" width="52" height="52" rx="14" fill="none" stroke="rgba(212,175,55,0.15)" strokeWidth="4" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path
-          d="M28 12 L28 44 M20 44 L36 44"
-          stroke="rgba(212,175,55,0.25)"
-          strokeWidth="1"
           strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 18.75a6 6 0 0 0 6-6v-4.5a6 6 0 1 0-12 0v4.5a6 6 0 0 0 6 6Z"
         />
-        <path d="M16 40 L40 28" stroke="url(#logoRail)" strokeWidth="2.8" strokeLinecap="round" />
-        <path d="M16 34 L40 22" stroke="url(#logoRail)" strokeWidth="2.8" strokeLinecap="round" />
-        {[18, 22, 26, 30, 34, 38].map((x) => (
-          <line
-            key={x}
-            x1={x + 2}
-            y1={38 - (x - 18) * 0.55}
-            x2={x + 6}
-            y2={36 - (x - 18) * 0.55}
-            stroke="rgba(180,186,198,0.35)"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-          />
-        ))}
-        <circle cx="28" cy="12" r="3" fill="url(#logoGold)" />
-        <circle cx="28" cy="12" r="1.2" fill="#0a0a0e" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 3.866-3.582 7-8 7s-8-3.134-8-7" />
       </svg>
     </div>
   );
@@ -87,14 +63,21 @@ function LogoMark() {
 function AppFooter() {
   return (
     <footer className="footer">
-      <span>{APP_NAME}</span>
-      <span className="footer-sep">·</span>
-      <span>
-        разработчик{" "}
-        <a className="footer-link" href={DEVELOPER_URL} target="_blank" rel="noopener noreferrer">
-          {DEVELOPER_NAME}
-        </a>
-      </span>
+      <div className="container footer-inner">
+        <div>
+          <p className="footer-brand">
+            {APP_BRAND_MAIN}
+            <span className="text-gold">{APP_BRAND_ACCENT}</span>
+          </p>
+          <p className="footer-tagline">{APP_TAGLINE}</p>
+        </div>
+        <p className="footer-copy">
+          разработчик{" "}
+          <a className="footer-link" href={DEVELOPER_URL} target="_blank" rel="noopener noreferrer">
+            {DEVELOPER_NAME}
+          </a>
+        </p>
+      </div>
     </footer>
   );
 }
@@ -269,7 +252,7 @@ export default function App() {
 
   if (authRequired === null) {
     return (
-      <div className="app loading-screen">
+      <div className="app carbon-bg loading-screen">
         <div className="loader" aria-hidden />
         <p>Загрузка системы…</p>
         {error ? (
@@ -287,22 +270,22 @@ export default function App() {
 
   if (authRequired && !user) {
     return (
-      <div className="app">
+      <div className="app carbon-bg">
         <header className="header">
-          <div className="header-inner">
+          <div className="container header-inner">
             <div className="logo">
               <LogoMark />
               <div>
-                <h1>{APP_NAME}</h1>
+                <BrandTitle />
                 <p>Защищённый доступ</p>
               </div>
             </div>
           </div>
         </header>
         <main className="main">
-          <section className="panel">
+          <div className="container">
             <Login authRequired={authRequired} onSuccess={setUser} />
-          </section>
+          </div>
         </main>
         <AppFooter />
       </div>
@@ -328,13 +311,13 @@ export default function App() {
       unknownTerms.length > 0);
 
   return (
-    <div className="app">
+    <div className="app carbon-bg">
       <header className="header">
-        <div className="header-inner">
+        <div className="container header-inner">
           <div className="logo">
             <LogoMark />
             <div>
-              <h1>{APP_NAME}</h1>
+              <BrandTitle />
               <p>{APP_TAGLINE}</p>
             </div>
           </div>
@@ -364,8 +347,9 @@ export default function App() {
       </header>
 
       <main className="main">
+        <div className="container">
         {editable && (
-          <section className="panel upload-panel">
+          <section className="panel carbon-panel upload-panel">
             <h2>Загрузите аудио или запишите аудио</h2>
             <p className="hint">
               Форматы: WAV, MP3, M4A, FLAC. Запись с микрофона или файл — результат попадёт в таблицу после
@@ -420,7 +404,7 @@ export default function App() {
         )}
 
         {adminView && session?.full_transcript && (
-          <section className="panel transcript-panel">
+          <section className="panel carbon-panel transcript-panel">
             <h2>Шаг 3–4: ASR и логические блоки</h2>
             {session.logical_blocks.length > 0 && session.records.length > 0 && (
               <p className="hint multi-record-summary">
@@ -490,7 +474,7 @@ export default function App() {
         )}
 
         {session && session.records.length > 0 && (
-          <section className="panel table-panel">
+          <section className="panel carbon-panel table-panel">
             <div className="table-header">
               <h2>
                 {adminView
@@ -592,7 +576,7 @@ export default function App() {
         )}
 
         {hasWarningsPanel && (
-          <section className="panel meta-panel">
+          <section className="panel carbon-panel meta-panel">
             <h2>{adminView ? "Шаг 7: Предупреждения" : "Требует проверки"}</h2>
             {disputedRows.length > 0 && (
               <div className="meta-block">
@@ -663,13 +647,14 @@ export default function App() {
         )}
 
         {session && !session.full_transcript && !loading && editable && (
-          <section className="panel empty-panel">
+          <section className="panel carbon-panel empty-panel">
             <p>
               Файл <strong>{session.original_name}</strong> загружен. Нажмите «Обработать» — распознавание и
               разбор выполняются на сервере.
             </p>
           </section>
         )}
+        </div>
       </main>
 
       <AppFooter />

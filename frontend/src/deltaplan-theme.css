@@ -1,0 +1,138 @@
+/* Design tokens & surfaces — aligned with DeltaplanAI (ai-aggregator) */
+
+:root {
+  --background: #050505;
+  --foreground: #e8eaed;
+  --muted: #8b919a;
+  --border: rgba(192, 196, 204, 0.14);
+  --card: #0c0c0c;
+  --silver: #c0c4cc;
+  --silver-dim: #8a919d;
+  --gold: #c9a962;
+  --gold-light: #e2d4a8;
+  --gold-dim: #9a7b3a;
+
+  --black: var(--background);
+  --white: var(--foreground);
+  --carbon-border: var(--border);
+  --gold-dark: var(--gold-dim);
+  --gold-muted: rgb(201 169 98 / 0.65);
+  --record-red: #c41e1e;
+  --record-red-dark: #8b1414;
+  --danger: var(--record-red);
+  --radius: 16px;
+  --radius-sm: 8px;
+  --font: "Geist", "Inter", system-ui, sans-serif;
+  --shadow-gold: 0 8px 32px rgb(201 169 98 / 0.08);
+}
+
+::selection {
+  background: rgb(201 169 98 / 0.35);
+  color: #fff;
+}
+
+.carbon-bg {
+  background-color: #050505;
+  background-image:
+    linear-gradient(
+      27deg,
+      transparent 48%,
+      rgba(255, 255, 255, 0.018) 49%,
+      rgba(255, 255, 255, 0.018) 51%,
+      transparent 52%
+    ),
+    linear-gradient(
+      -27deg,
+      transparent 48%,
+      rgba(255, 255, 255, 0.012) 49%,
+      rgba(255, 255, 255, 0.012) 51%,
+      transparent 52%
+    ),
+    linear-gradient(180deg, #050505 0%, #0a0a0a 50%, #050505 100%);
+  background-size: 8px 8px, 8px 8px, 100% 100%;
+}
+
+.carbon-panel {
+  background-color: rgba(12, 12, 12, 0.85);
+  background-image:
+    linear-gradient(
+      135deg,
+      rgba(192, 196, 204, 0.04) 0%,
+      transparent 40%,
+      rgba(201, 169, 98, 0.03) 100%
+    ),
+    linear-gradient(
+      27deg,
+      transparent 48%,
+      rgba(255, 255, 255, 0.015) 49%,
+      rgba(255, 255, 255, 0.015) 51%,
+      transparent 52%
+    );
+  background-size: 100% 100%, 6px 6px;
+  border: 1px solid rgba(192, 196, 204, 0.12);
+}
+
+.carbon-card {
+  background-color: rgba(10, 10, 10, 0.9);
+  background-image:
+    linear-gradient(
+      145deg,
+      rgba(192, 196, 204, 0.06) 0%,
+      transparent 45%,
+      rgba(201, 169, 98, 0.04) 100%
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 255, 255, 0.012) 3px,
+      rgba(255, 255, 255, 0.012) 4px
+    );
+  border: 1px solid rgba(192, 196, 204, 0.1);
+}
+
+.divider-metallic {
+  border-color: rgba(192, 196, 204, 0.1);
+}
+
+.text-gold {
+  color: var(--gold);
+}
+
+.text-gradient-metallic {
+  background: linear-gradient(
+    135deg,
+    var(--gold-light) 0%,
+    var(--gold) 45%,
+    var(--silver) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.input-theme {
+  border: 1px solid rgba(192, 196, 204, 0.14);
+  background: rgba(8, 8, 8, 0.9);
+  color: var(--foreground);
+}
+
+.input-theme::placeholder {
+  color: var(--silver-dim);
+}
+
+.input-theme:focus {
+  border-color: rgb(201 169 98 / 0.45);
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(201 169 98 / 0.15);
+}
+
+.chip-active {
+  border-color: rgb(201 169 98 / 0.45);
+  background: rgb(201 169 98 / 0.1);
+  color: var(--gold-light);
+}
+
+.shadow-gold {
+  box-shadow: var(--shadow-gold);
+}

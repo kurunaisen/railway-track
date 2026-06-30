@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { APP_NAME } from "./branding";
+import { APP_TAGLINE } from "./branding";
 import { login, type AuthUser } from "./auth";
 
 interface Props {
@@ -40,31 +40,41 @@ export default function Login({ onSuccess, authRequired }: Props) {
 
   return (
     <div className="login-panel">
-      <h2>Вход в {APP_NAME}</h2>
-      <p className="hint">Модуль интеграции аудио в таблицу</p>
-      <form onSubmit={handleSubmit} className="login-form">
-        <label>
-          Логин
-          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
-        </label>
-        <label>
-          Пароль
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-        </label>
-        {error && <div className="error">{error}</div>}
-        <button className="btn btn-primary" type="submit" disabled={loading}>
-          {loading ? "Вход…" : "Войти"}
-        </button>
-      </form>
+      <h2>Вход</h2>
+      <p className="hint" style={{ textAlign: "center", marginBottom: 0 }}>
+        {APP_TAGLINE}
+      </p>
+      <div className="login-shell carbon-panel">
+        <form onSubmit={handleSubmit} className="login-form">
+          <label>
+            Логин
+            <input
+              className="input-theme"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+            />
+          </label>
+          <label>
+            Пароль
+            <input
+              className="input-theme"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          {error && <div className="error">{error}</div>}
+          <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: "100%" }}>
+            {loading ? "Вход…" : "Войти"}
+          </button>
+        </form>
+      </div>
       <p className="login-roles">
         Роли: <strong>admin</strong> — аудит; <strong>operator</strong> — загрузка; <strong>viewer</strong> — просмотр.
       </p>
-      <p className="hint" style={{ marginTop: 12 }}>
+      <p className="hint" style={{ marginTop: 12, textAlign: "center" }}>
         Первый вход: логин <strong>admin</strong>, пароль <strong>admin</strong> (если не меняли в Railway).
         <br />
         Пароль <code>DEFAULT_ADMIN_PASSWORD</code> действует только при первом создании БД.
