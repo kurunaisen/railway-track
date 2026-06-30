@@ -782,6 +782,23 @@ td.disputed .cell-input {
   padding: 0.35rem 0;
   color: var(--silver);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  line-height: 1.55;
+}
+
+.issue-context {
+  color: var(--gold-muted);
+  font-size: 0.82rem;
+}
+
+.issue-fragment {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--silver-dim);
+  font-style: italic;
+}
+
+.meta-hint {
+  margin-bottom: 0.65rem;
 }
 
 .view-toggle {

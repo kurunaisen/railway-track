@@ -131,7 +131,14 @@ def _sheet_records_wide(records) -> pd.DataFrame:
 
 def _sheet_errors(session_id: int, errors: list[dict]) -> pd.DataFrame:
     return pd.DataFrame([
-        {"session_id": session_id, "row": e.get("row"), "error": e.get("error"), "text_fragment": e.get("text")}
+        {
+            "session_id": session_id,
+            "row": e.get("row"),
+            "field": e.get("field"),
+            "error": e.get("error") or e.get("message"),
+            "text_fragment": e.get("text"),
+            "severity": e.get("severity"),
+        }
         for e in errors
     ])
 

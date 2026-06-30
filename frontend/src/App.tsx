@@ -5,10 +5,12 @@ import {
   canEdit,
   confirmSession,
   exportExcelUrl,
+  fieldLabel,
   formatTime,
   getJob,
   getSession,
   isAdmin,
+  issueText,
   processSession,
   saveSession,
   uploadAudio,
@@ -293,6 +295,21 @@ export default function App() {
   const disputedCount =
     session?.records.reduce((n, r) => n + (r.disputed_fields?.length ?? 0), 0) ?? 0;
 
+  const disputedRows =
+    session?.records
+      .map((r, i) => ({ row: i, record: r }))
+      .filter(({ record }) => (record.disputed_fields?.length ?? 0) > 0) ?? [];
+
+  const unknownTerms =
+    session?.unknown_terms.filter((t) => (t.term || "").trim()) ?? [];
+
+  const hasWarningsPanel =
+    !!session &&
+    (disputedRows.length > 0 ||
+      (session.validation_warnings?.length ?? 0) > 0 ||
+      (session.parse_errors?.length ?? 0) > 0 ||
+      unknownTerms.length > 0);
+
   return (
     <div className="app">
       <header className="header">
@@ -556,42 +573,70 @@ export default function App() {
           </section>
         )}
 
-        {session &&
-          ((session.validation_warnings?.length ?? 0) > 0 ||
-            (session.parse_errors?.length ?? 0) > 0 ||
-            (session.unknown_terms?.length ?? 0) > 0) && (
+        {hasWarningsPanel && (
           <section className="panel meta-panel">
-            <h2>Шаг 7: Предупреждения</h2>
-            {session.validation_warnings.length > 0 && (
+            <h2>{adminView ? "Шаг 7: Предупреждения" : "Требует проверки"}</h2>
+            {disputedRows.length > 0 && (
               <div className="meta-block">
-                <h3>Валидация ({session.validation_warnings.length})</h3>
+                <h3>Спорные поля ({disputedCount})</h3>
                 <ul>
-                  {session.validation_warnings.map((w, i) => (
-                    <li key={i}>
-                      Строка {(w.row ?? 0) + 1}, {w.field}: {w.message}
+                  {disputedRows.map(({ row, record }) => (
+                    <li key={record.id ?? row}>
+                      <strong>Строка {row + 1}:</strong>{" "}
+                      {record.disputed_fields.map((f) => fieldLabel(f)).join(", ")}
+                      {record.km != null && record.piket != null && (
+                        <span className="issue-context">
+                          {" "}
+                          (км {record.km}, пикет {record.piket})
+                        </span>
+                      )}
+                      {record.raw_text && (
+                        <div className="issue-fragment">«{record.raw_text.slice(0, 160)}»</div>
+                      )}
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-            {session.parse_errors.length > 0 && (
+            {session!.validation_warnings.length > 0 && (
               <div className="meta-block">
-                <h3>Ошибки разбора ({session.parse_errors.length})</h3>
+                <h3>Валидация ({session!.validation_warnings.length})</h3>
                 <ul>
-                  {session.parse_errors.map((e, i) => (
+                  {session!.validation_warnings.map((w, i) => (
                     <li key={i}>
-                      Строка {(e.row ?? 0) + 1}: {e.error}
+                      {w.row != null && w.row >= 0 ? `Строка ${w.row + 1}: ` : ""}
+                      {issueText(w)}
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-            {session.unknown_terms.length > 0 && (
+            {session!.parse_errors.length > 0 && (
               <div className="meta-block">
-                <h3>Неизвестные термины</h3>
+                <h3>Ошибки разбора ({session!.parse_errors.length})</h3>
+                <ul>
+                  {session!.parse_errors.map((e, i) => (
+                    <li key={i}>
+                      {e.row != null && e.row >= 0 ? `Строка ${e.row + 1}: ` : "Общее: "}
+                      {issueText(e)}
+                      {e.text && <div className="issue-fragment">«{e.text}»</div>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {unknownTerms.length > 0 && (
+              <div className="meta-block">
+                <h3>Неизвестные термины ({unknownTerms.length})</h3>
+                <p className="hint meta-hint">
+                  Слова вне словаря — возможная ошибка ASR; проверьте строку таблицы.
+                </p>
                 <div className="terms-cloud">
-                  {session.unknown_terms.slice(0, 15).map((t) => (
-                    <span key={t.term} className="term-tag">{t.term}</span>
+                  {unknownTerms.slice(0, 20).map((t) => (
+                    <span key={t.term} className="term-tag" title={`встречается ${t.count}×`}>
+                      {t.term}
+                      {t.count > 1 ? ` ×${t.count}` : ""}
+                    </span>
                   ))}
                 </div>
               </div>

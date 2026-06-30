@@ -83,8 +83,8 @@ export interface AudioSession {
   transcript_segments: TranscriptSegment[];
   logical_blocks: LogicalBlock[];
   logical_records: LogicalRecord[];
-  unknown_terms: { term: string; count: number }[];
-  parse_errors: { row: number; error: string; text?: string; severity?: string }[];
+  unknown_terms: { term: string; count: number; context?: string }[];
+  parse_errors: { row: number; error: string; field?: string; message?: string; text?: string; severity?: string }[];
   validation_warnings: { row: number; field: string; message: string; severity?: string }[];
   file_metadata: Record<string, unknown>;
   records_wide: WideTable | null;
@@ -240,4 +240,19 @@ export function canEdit(role: string): boolean {
 
 export function isAdmin(role: string): boolean {
   return role === "admin";
+}
+
+export function fieldLabel(field: string): string {
+  return FIELD_LABELS[field as EditableField] || field;
+}
+
+export function issueText(issue: {
+  error?: string;
+  message?: string;
+  field?: string;
+}): string {
+  const text = (issue.error || issue.message || "").trim();
+  if (!text) return "—";
+  const field = issue.field && issue.field !== "general" ? fieldLabel(issue.field) : null;
+  return field ? `${field}: ${text}` : text;
 }

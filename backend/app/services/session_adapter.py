@@ -22,6 +22,7 @@ from app.services.inspection_repository import load_structured_records
 from app.services.transcript_crypto import decrypt_transcript_text
 from app.services.inspection_repository import FlatInspectionRow, load_active_job, load_flat_rows, load_latest_done_job
 from app.services.inspection_form import build_form_rows
+from app.services.pipeline_issues import normalize_pipeline_issues
 from app.services.wide_table import build_wide_rows
 
 logger = logging.getLogger(__name__)
@@ -159,8 +160,7 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
             except (ValidationError, TypeError) as exc:
                 logger.warning("Skip invalid logical block for job %s: %s", done.id, exc)
         file_metadata = meta.get("file_metadata", {})
-        parse_errors = meta.get("parse_errors", [])
-        validation_warnings = [e for e in parse_errors if e.get("severity") == "warning"]
+        parse_errors, validation_warnings = normalize_pipeline_issues(meta.get("parse_errors", []))
         confirmed = bool(meta.get("confirmed"))
         unknown_terms = [
             {"term": t.term_text, "count": 1, "context": t.context_text}

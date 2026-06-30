@@ -236,6 +236,11 @@ def save_job_results(
         "logical_blocks": logical_blocks,
         "file_metadata": file_metadata,
         "parse_errors": all_errors,
+        "disputed_by_row": [
+            {"row": idx, "fields": list(row.disputed_fields)}
+            for idx, row in enumerate(parsed_rows)
+            if row.disputed_fields
+        ],
     })
     return len(parsed_rows)
 
@@ -245,7 +250,9 @@ def load_latest_done_job(db: Session, audio_file_id: int) -> ProcessingJob | Non
         db.query(ProcessingJob)
         .options(
             joinedload(ProcessingJob.transcript).joinedload(Transcript.segments),
-            joinedload(ProcessingJob.inspection_records).joinedload(InspectionRecord.items),
+            joinedload(ProcessingJob.inspection_records)
+            .joinedload(InspectionRecord.items)
+            .joinedload(InspectionItem.validation_errors),
             joinedload(ProcessingJob.unknown_terms),
         )
         .filter(ProcessingJob.audio_file_id == audio_file_id, ProcessingJob.status == "done")
@@ -268,15 +275,24 @@ def load_active_job(db: Session, audio_file_id: int) -> ProcessingJob | None:
 
 def load_flat_rows(job: ProcessingJob, audio_file_id: int) -> list[FlatInspectionRow]:
     rows: list[FlatInspectionRow] = []
+    meta = job.get_pipeline_metadata() or {}
+    disputed_map = {
+        int(entry["row"]): list(entry.get("fields") or [])
+        for entry in meta.get("disputed_by_row", [])
+    }
     global_order = 0
     for insp_rec in sorted(job.inspection_records, key=lambda r: r.sequence_number):
         for item in sorted(insp_rec.items, key=lambda i: i.order_in_record):
             val = item.value_text
             if val is None and item.value_numeric is not None:
                 val = str(item.value_numeric)
-            disputed: list[str] = []
-            if item.needs_review:
-                disputed.append(item.parameter_name or "value")
+            disputed: list[str] = list(dict.fromkeys(disputed_map.get(global_order, [])))
+            if not disputed:
+                disputed = list(dict.fromkeys(
+                    e.field_name for e in item.validation_errors if e.severity == "error"
+                ))
+            if not disputed and item.needs_review:
+                disputed = ["value"]
             val_errs = [
                 f"{e.field_name}: {e.error_message}"
                 for e in item.validation_errors
