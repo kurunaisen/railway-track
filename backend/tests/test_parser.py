@@ -1,5 +1,6 @@
 import pytest
 
+from app.services.normalizer import normalize_all
 from app.services.parser import parse_transcript, split_into_logical_chunks
 
 
@@ -9,8 +10,9 @@ def test_single_record_extraction():
         "километр 245, пикет 3, объект рельс, износ 12 миллиметров, ограничение скорости 40"
     )
     result = parse_transcript(text)
-    assert len(result.records) >= 1
-    r = result.records[0]
+    rows = normalize_all(result.records)
+    assert len(rows) >= 1
+    r = rows[0]
     assert r.record_date == "29.06.2026"
     assert r.uchastok is not None
     assert r.peregon is not None
@@ -21,11 +23,7 @@ def test_single_record_extraction():
     assert r.defect == "износ"
     assert r.value == "12"
     assert r.unit == "мм"
-    speed_rows = [x for x in result.records if x.speed_limit]
-    assert len(speed_rows) >= 1
-    assert speed_rows[0].speed_limit == "40"
-    assert speed_rows[0].position_type == "speed_limit"
-
+    assert r.speed_limit == "40"
 
 def test_multiple_records_long_audio():
     text = (

@@ -7,6 +7,7 @@ from typing import Protocol
 
 from app.services.locations import format_location_for_table, is_peregon_haul
 from app.services.rail_side import extract_rail_side_note, is_rail_side_only_fragment
+from app.services.speed_limit import is_speed_parameter, strip_speed_limit_phrases
 
 FORM_COLUMNS: tuple[str, ...] = (
     "Nп/п",
@@ -156,8 +157,10 @@ def format_note(rec: FormRowSource) -> str:
 
 
 def format_defect(rec: FormRowSource) -> str:
-    defect = (rec.defect or "").strip()
+    defect = strip_speed_limit_phrases(rec.defect or "").strip()
     parameter = (rec.parameter or "").strip()
+    if is_speed_parameter(parameter):
+        parameter = ""
     value = (rec.value or "").strip()
     unit = (rec.unit or "").strip()
 

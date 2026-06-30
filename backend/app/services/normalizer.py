@@ -6,6 +6,7 @@ import re
 
 from app.services.km_parse import merge_hesitated_km_value
 from app.services.parser import ParsedRecord
+from app.services.speed_limit import reconcile_speed_limit_rows
 from app.services.rail_side import (
     extract_rail_side,
     extract_rail_side_note,
@@ -185,6 +186,8 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
     record.piket = normalize_piket(record.piket)
     record.unit = normalize_unit(record.unit)
     record.speed_limit = normalize_speed(record.speed_limit)
+    if record.speed_limit and not record.unit:
+        record.unit = "км/ч"
     if record.comment:
         record.comment = record.comment.strip().lower()
     if record.value:
@@ -193,5 +196,6 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
 
 
 def normalize_all(records: list[ParsedRecord]) -> list[ParsedRecord]:
+    records = reconcile_speed_limit_rows(records)
     records = reconcile_rail_side_rows(records)
     return [normalize_record(r) for r in records]

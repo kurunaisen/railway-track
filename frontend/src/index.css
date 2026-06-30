@@ -531,6 +531,39 @@ body::before {
   align-items: center;
 }
 
+.table-layout {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}
+
+.table-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.table-aside {
+  flex-shrink: 0;
+  width: min(220px, 24vw);
+  position: sticky;
+  top: 5.5rem;
+}
+
+.table-aside-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  box-shadow: var(--shadow-gold);
+  background: var(--carbon-mid);
+}
+
+.table-layout .table-wrap {
+  margin-top: 0;
+}
+
 .table-wrap {
   overflow-x: auto;
   margin-top: 1rem;
@@ -807,5 +840,9 @@ tr.row-warning td {
   .session-badge {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .table-aside {
+    display: none;
   }
 }

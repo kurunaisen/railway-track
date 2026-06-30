@@ -36,6 +36,11 @@ from app.services.rail_side import (
     merge_comment,
     strip_rail_side_phrases,
 )
+from app.services.speed_limit import (
+    extract_speed_limit,
+    is_speed_parameter,
+    strip_speed_limit_phrases,
+)
 from app.services.segmentation import LogicalBlock
 
 POSITION_TYPES = ("parameter", "defect", "speed_limit")
@@ -57,6 +62,20 @@ SPEED_LIMIT_MARKERS = (
     "ограничение скорости",
     "скорость не более",
     "скорость не выше",
+    "скорость ограничена",
+)
+
+_SPEED_LIMIT_ANCHOR_RE = re.compile(
+    r"(?:"
+    r"ограничени[ея]\s+скорост(?:и|ь)?(?:\s+до\s*)?\s*\d+(?:\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час))?"
+    r"|"
+    r"скорост(?:ь|и)\s+(?:не\s+более|не\s+выше|до|ограничена|ограничено)?\s*\d+(?:\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час))?"
+    r"|"
+    r"скорост(?:ь|и)\s+\d+\s*(?:км\s*/?\s*ч|километр(?:ов)?\s*в\s*час)?"
+    r"|"
+    r"\d+\s*км\s*/?\s*ч"
+    r")",
+    re.IGNORECASE,
 )
 
 KM_SPLIT_RE = re.compile(
@@ -173,7 +192,19 @@ def _speed_limit_positions(text: str) -> list[tuple[int, int]]:
                     end = kw_pos
             spans.append((pos, end))
             start = pos + 1
-    return spans
+    for match in _SPEED_LIMIT_ANCHOR_RE.finditer(normalized):
+        spans.append((match.start(), match.end()))
+    if not spans:
+        return spans
+    spans.sort(key=lambda x: x[0])
+    merged: list[tuple[int, int]] = [spans[0]]
+    for start, end in spans[1:]:
+        prev_start, prev_end = merged[-1]
+        if start <= prev_end:
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+    return merged
 
 
 def split_into_position_fragments(text: str) -> list[str]:
@@ -231,7 +262,7 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
 
     for marker in SPEED_LIMIT_MARKERS:
         if marker in normalized:
-            sp = _extract_speed_limit(normalized)
+            sp = extract_speed_limit(normalized)
             if sp:
                 return PositionItem(
                     position_index=position_index,
@@ -242,6 +273,19 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
                     speed_limit=sp,
                     raw_text=raw,
                 )
+
+    sp = extract_speed_limit(normalized)
+    if sp and re.search(r"\bскорост(?:ь|и)\s+\d+", normalized, re.IGNORECASE):
+        if not _extract_defect(normalized) and not _extract_parameter(normalized):
+            return PositionItem(
+                position_index=position_index,
+                position_type="speed_limit",
+                parameter="ограничение скорости",
+                value=sp,
+                unit="км/ч",
+                speed_limit=sp,
+                raw_text=raw,
+            )
 
     param = _extract_parameter(normalized)
     defect = _extract_defect(normalized)
@@ -284,6 +328,14 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
             obekt=obekt,
             raw_text=raw,
         )
+        speed = extract_speed_limit(normalized)
+        if speed:
+            item.speed_limit = speed
+            cleaned = strip_speed_limit_phrases(full_defect).strip()
+            if cleaned and not is_speed_parameter(cleaned):
+                item.defect = cleaned
+            elif is_speed_parameter(full_defect) or is_speed_parameter(cleaned):
+                item.defect = None
         if not value and "трещина" not in defect:
             item.disputed_fields.append("value")
         return item
@@ -335,7 +387,7 @@ def position_to_row(ctx: LogicalRecordContext, pos: PositionItem) -> ParsedRecor
         value=pos.value,
         unit=pos.unit,
         obekt=pos.obekt,
-        speed_limit=pos.speed_limit if pos.position_type == "speed_limit" else None,
+        speed_limit=pos.speed_limit,
         raw_text=pos.raw_text,
         disputed_fields=list(pos.disputed_fields),
     )

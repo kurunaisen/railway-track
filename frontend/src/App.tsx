@@ -448,51 +448,62 @@ export default function App() {
               </div>
             </div>
             {!editable && <p className="hint">Режим просмотра (viewer).</p>}
-            {tableView === "wide" && session.records_wide ? (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      {session.records_wide.columns.map((c) => (
-                        <th key={c}>{c}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {session.records_wide.rows.map((row, i) => (
-                      <tr key={i}>
-                        {session.records_wide!.columns.map((c) => (
-                          <td key={c}>{row[c] ?? "—"}</td>
+            <div className="table-layout">
+              <div className="table-main">
+                {tableView === "wide" && session.records_wide ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          {session.records_wide.columns.map((c) => (
+                            <th key={c}>{c}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {session.records_wide.rows.map((row, i) => (
+                          <tr key={i}>
+                            {session.records_wide!.columns.map((c) => (
+                              <td key={c}>{row[c] ?? "—"}</td>
+                            ))}
+                          </tr>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : session.records_form ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          {session.records_form.columns.map((c) => (
+                            <th key={c}>{c}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {session.records_form.rows.map((row, i) => (
+                          <tr key={i}>
+                            {session.records_form!.columns.map((c) => (
+                              <td key={c}>{row[c] ?? "—"}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="hint">
+                    Нет данных для таблицы. Переобработайте файл после обновления сервера.
+                  </p>
+                )}
               </div>
-            ) : session.records_form ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    {session.records_form.columns.map((c) => (
-                      <th key={c}>{c}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {session.records_form.rows.map((row, i) => (
-                    <tr key={i}>
-                      {session.records_form!.columns.map((c) => (
-                        <td key={c}>{row[c] ?? "—"}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {(session.records_wide || session.records_form) && (
+                <aside className="table-aside" aria-hidden>
+                  <img src="/surprise.png" alt="" className="table-aside-art" />
+                </aside>
+              )}
             </div>
-            ) : (
-              <p className="hint">Нет данных для таблицы. Переобработайте файл после обновления сервера.</p>
-            )}
           </section>
         )}
 

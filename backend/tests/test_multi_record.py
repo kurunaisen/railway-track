@@ -38,14 +38,15 @@ def test_multiple_positions_same_logical_record():
     assert {r.position_index for r in rows} >= {0, 1}
 
 
-def test_speed_limit_is_separate_position():
+def test_speed_limit_merged_with_defect():
     text = "Перегon А — Б, путь 1, км 10, износ 5 мм, ограничение скорости 40.".replace("перегon", "перегон")
-    rows = expand_blocks_to_canonical_rows(segment_logical_blocks(text))
-    speed_rows = [r for r in rows if r.position_type == "speed_limit"]
+    from app.services.normalizer import normalize_all
+
+    rows = normalize_all(expand_blocks_to_canonical_rows(segment_logical_blocks(text)))
     defect_rows = [r for r in rows if r.defect]
-    assert len(speed_rows) >= 1
-    assert len(defect_rows) >= 1
-    assert len(rows) >= 2
+    assert len(defect_rows) == 1
+    assert defect_rows[0].speed_limit == "40"
+    assert len(rows) == 1
 
 
 def test_one_audio_three_peregons_n_rows():

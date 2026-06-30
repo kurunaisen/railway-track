@@ -78,13 +78,25 @@ def _is_location_km_context(text: str, match_start: int) -> bool:
     return bool(_LOCATION_KM_BEFORE_RE.search(before))
 
 
+def _is_speed_km_context(text: str, match_start: int) -> bool:
+    before = text[max(0, match_start - 24):match_start].lower()
+    after = text[match_start: match_start + 24].lower()
+    if re.search(r"скорост", before):
+        return True
+    if re.search(r"ограничени[ея]\s+скорост", before):
+        return True
+    return bool(re.search(r"км\s*/?\s*ч|километр(?:ов)?\s*в\s*час", after))
+
+
 def extract_binding_km(text: str) -> str | None:
-    """Км привязки дефекта; км в названии блок-поста не считается."""
+    """Км привязки дефекта; км в названии блок-поста и «60 км/ч» не считаются."""
     normalized = merge_hesitated_km_in_text(text)
     candidates: list[tuple[int, str]] = []
     for pattern in _KM_VALUE_PATTERNS:
         for match in pattern.finditer(normalized):
             if _is_location_km_context(normalized, match.start()):
+                continue
+            if _is_speed_km_context(normalized, match.start()):
                 continue
             candidates.append((match.start(), match.group(1).replace(",", ".")))
     if not candidates:

@@ -12,6 +12,7 @@ from app.services.domain_terms import (
 )
 from app.services.km_parse import extract_binding_km
 from app.services.locations import extract_single_location, is_peregon_haul
+from app.services.speed_limit import extract_speed_limit as _extract_speed_limit
 
 
 @dataclass
@@ -197,18 +198,6 @@ def _extract_obekt(text: str) -> str | None:
     for keyword in OBJECT_KEYWORDS:
         if keyword in text:
             return keyword
-    return None
-
-
-def _extract_speed_limit(text: str) -> str | None:
-    for pat in (
-        r"ограничени[ея]\s+скорост(?:и|ь)\s*(?:до\s*)?(\d+)",
-        r"скорост(?:ь|и)\s*(?:не\s*более|до|ограничена)\s*(\d+)",
-        r"(\d+)\s*(?:км/ч|километр(?:ов)?\s*в\s*час)",
-    ):
-        m = re.search(pat, text, re.IGNORECASE)
-        if m:
-            return m.group(1)
     return None
 
 
