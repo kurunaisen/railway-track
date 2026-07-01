@@ -101,6 +101,23 @@ def test_repair_peregon_reference_from_words():
     assert row.reference == "1418 км, пк 2, 87 м"
 
 
+def test_repair_keeps_km_pk_reference_without_meter():
+    rows = repair_railway_rows(
+        [
+            _row(
+                location="Перегон Магнетиты - Шонгуй",
+                reference="249 км пикет 8",
+                sourceText="Перегон Магнетиты - Шонгуй на 249 км пикет 8 уширение рельсовой колеи 1543 мм",
+                defect="уширение рельсовой колеи 1543 мм",
+            )
+        ]
+    )
+
+    row = rows[0]
+    assert row.location == "Перегон Магнетиты - Шонгуй"
+    assert row.reference == "249 км, пк 8"
+
+
 def test_repair_cleans_excel_observed_location_and_reference_leaks():
     rows = repair_railway_rows(
         [

@@ -20,14 +20,20 @@ _LOCATION_FORBIDDEN_RE = re.compile(
 _REFERENCE_PATTERNS = [
     re.compile(
         r"(?P<km>\d{3,5})\s*(?:км|километр\w*)\s*"
-        r"(?:пикет|пике|пк)\s*(?P<pk>\d+)\s*"
+        r"(?:пикет|пике|пк)\s*(?P<pk>\d+)[\s,.;-]*"
         r"(?P<m>\d+)\s*(?:м|метр\w*)?",
         re.IGNORECASE,
     ),
     re.compile(
         r"(?P<km>\d{3,5})\s*(?:км|километр\w*)\s*"
-        r"(?:пикет|пике|пк)\s*(?P<pk>\d+)\s*"
+        r"(?:пикет|пике|пк)\s*(?P<pk>\d+)[\s,.;-]*"
         r"(?:м|метр\w*)\s*(?P<m>\d+)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?P<km>\d{2,5})\s*(?:км|километр\w*)\s*"
+        r"(?:пикет|пике|пк)\s*(?P<pk>\d+)"
+        r"(?![\s,.;-]*(?:м|метр\w*|\d))",
         re.IGNORECASE,
     ),
 ]
@@ -86,7 +92,11 @@ def _extract_reference(text: str) -> str | None:
     for pattern in _REFERENCE_PATTERNS:
         match = pattern.search(text)
         if match:
-            return f"{match.group('km')} км, пк {match.group('pk')}, {match.group('m')} м"
+            reference = f"{match.group('km')} км, пк {match.group('pk')}"
+            meter = match.groupdict().get("m")
+            if meter:
+                reference = f"{reference}, {meter} м"
+            return reference
     return None
 
 
