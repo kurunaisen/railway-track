@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     llm_provider: LlmProviderName = "openai"
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
+    openai_extraction_model: str = "gpt-4.1"
     parser_mode: ParserMode = "hybrid"  # legacy only (v1 pipeline in app/legacy)
 
     # ── Security ──
@@ -95,6 +96,7 @@ class Settings(BaseSettings):
         "yandex_speech_api_key",
         "yandex_speech_folder_id",
         "openai_api_key",
+        "openai_extraction_model",
         mode="before",
     )
     @classmethod

@@ -8,11 +8,25 @@ from app.config import settings
 
 
 class LlmProvider(Protocol):
-    def complete_json(self, *, system: str, user: str, schema: dict[str, Any]) -> str: ...
+    def complete_json(
+        self,
+        *,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        model: str | None = None,
+    ) -> str: ...
 
 
 class OpenAiProvider:
-    def complete_json(self, *, system: str, user: str, schema: dict[str, Any]) -> str:
+    def complete_json(
+        self,
+        *,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        model: str | None = None,
+    ) -> str:
         from openai import OpenAI
 
         if not settings.openai_api_key:
@@ -20,7 +34,7 @@ class OpenAiProvider:
 
         client = OpenAI(api_key=settings.openai_api_key)
         response = client.chat.completions.create(
-            model=settings.openai_model,
+            model=model or settings.openai_model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
