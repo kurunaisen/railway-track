@@ -23,11 +23,6 @@ _TIP_ONLY_ROW_RE = re.compile(
     r"^(?:остри[ея]\s+остряк(?:а|ов|е|ом)?|остряк(?:а|ов|е|ом)?)\s*(?:пусть|путь)?\s*\d*\s*(?:мм)?\.?$",
     re.IGNORECASE,
 )
-_SWITCH_PATH_KEEP_RE = re.compile(
-    r"колеи|крестовин|остряк|сердечник|износ|стрелоч",
-    re.IGNORECASE,
-)
-_SLEEPER_CLUSTER_RE = re.compile(r"куст|шпал", re.IGNORECASE)
 
 SWITCH_TIP_NOTE = "в острии остряка"
 
@@ -38,14 +33,6 @@ def has_switch_tip_measurement(text: str) -> bool:
 
 def has_ram_rail_wear(text: str) -> bool:
     return bool(_RAM_RAIL_WEAR_RE.search(text or ""))
-
-
-def path_block_keeps_switch_context(text: str) -> bool:
-    """Путь 15 у стрелки — стр.п. сохраняем; путь 12 с кустом шпал — нет."""
-    normalized = _normalize_text(text)
-    if _SLEEPER_CLUSTER_RE.search(normalized) and not _SWITCH_PATH_KEEP_RE.search(normalized):
-        return False
-    return True
 
 
 def _enrich_wear_at_switch_tip(record: ParsedRecord) -> None:

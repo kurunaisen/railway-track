@@ -11,7 +11,6 @@ from app.services.parser import (
     _normalize_text,
     has_path_binding,
 )
-from app.services.switch_measurement import path_block_keeps_switch_context
 
 
 def _segment_put_switch(part: str) -> tuple[str | None, str | None]:
@@ -24,26 +23,19 @@ def _resolve_segment_location(
     part: str,
     inherited_switch: str | None,
 ) -> tuple[str | None, str | None, str | None]:
-    """(put, switch, inherited_switch после сегмента)."""
+    """
+    (put, switch, inherited_switch после сегмента).
+    Стр.п. не наследуем на новый «N путь» — только если назван в том же фрагменте.
+    """
     seg_put, seg_switch = _segment_put_switch(part)
-    switch = inherited_switch
-
-    if seg_switch:
-        switch = seg_switch
 
     if seg_put is not None:
-        put = seg_put
-        if path_block_keeps_switch_context(part):
-            record_switch = seg_switch or switch
-        else:
-            record_switch = seg_switch
-            switch = None
-        return put, record_switch, switch
+        return seg_put, seg_switch, seg_switch
 
     if seg_switch:
         return None, seg_switch, seg_switch
 
-    return None, switch, switch
+    return None, inherited_switch, inherited_switch
 
 
 def _apply_segment_to_record(
@@ -63,7 +55,6 @@ def propagate_switch_context(
 ) -> list[ParsedRecord]:
     """
     Сверяет put/switch с сегментами _split_by_location и перезаписывает поля.
-    LLM часто размазывает «путь 15» и стр.п. на все строки.
     """
     if not source_text or not records:
         return records

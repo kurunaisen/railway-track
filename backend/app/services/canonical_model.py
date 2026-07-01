@@ -38,7 +38,6 @@ from app.services.parser import (
     has_path_binding,
     PATH_BINDING_MARK_RE,
 )
-from app.services.switch_measurement import path_block_keeps_switch_context
 from app.services.rail_side import (
     extract_rail_side_note,
     is_rail_side_only_fragment,
@@ -236,13 +235,6 @@ def _inherit_location_fields(
         normalized = _normalize_text(loc_text)
         ctx.put = _extract_put(normalized)
         ctx.switch = _extract_switch(normalized)
-        if (
-            not ctx.switch
-            and inherited.station_active
-            and inherited.switch
-            and path_block_keeps_switch_context(normalized)
-        ):
-            ctx.switch = inherited.switch
         if inherited.station_active:
             ctx.peregon = None
             ctx.km = None

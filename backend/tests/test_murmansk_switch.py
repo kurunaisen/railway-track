@@ -44,15 +44,14 @@ def test_wear_switch_only_tip_in_note():
     assert f["Примечание"] and "остри" in f["Примечание"].lower()
 
 
-def test_gauge_on_path_15_with_switch():
+def test_gauge_on_path_15_only():
     rows = _rows()
     gauge = next(r for r in rows if r.defect and "колеи" in r.defect.lower())
     f = record_to_form_row(gauge, 2)
     assert gauge.put == "15"
-    assert gauge.switch == "10"
+    assert gauge.switch is None
     assert gauge.speed_limit == "60"
-    assert "15" in (f["№ пути, стрелочного перевода"] or "")
-    assert "стр.п. 10" in (f["№ пути, стрелочного перевода"] or "")
+    assert f["№ пути, стрелочного перевода"] == "15"
 
 
 def test_path_12_and_11_sleeper_clusters():
@@ -128,7 +127,8 @@ def test_llm_wrong_path_on_wear_row_reconciled():
     assert f1["Примечание"] and "остри" in f1["Примечание"].lower()
     assert rows[0].speed_limit is None
     assert rows[1].put == "15"
-    assert "15" in (f2["№ пути, стрелочного перевода"] or "")
+    assert rows[1].switch is None
+    assert f2["№ пути, стрелочного перевода"] == "15"
     assert not f2.get("Примечание") or "остри" not in (f2["Примечание"] or "").lower()
     assert rows[2].put == "12"
     assert rows[2].switch is None
