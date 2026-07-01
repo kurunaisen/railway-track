@@ -7,6 +7,10 @@ export interface TranscriptIssue {
   severity: TranscriptIssueSeverity;
   title: string;
   description: string;
+  safeFix?: {
+    replacement: string;
+    label: string;
+  };
 }
 
 export interface TranscriptQualitySegment {
@@ -50,6 +54,10 @@ function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
         severity: "error",
         title: "Подозрительное число перед измерением колеи",
         description: `Перед "${second} мм" найдено лишнее или ошибочное число "${first}". Проверьте transcript вручную.`,
+        safeFix: {
+          replacement: "",
+          label: `Удалить "${first}"`,
+        },
       });
       continue;
     }
@@ -146,4 +154,19 @@ export function buildTranscriptQualitySegments(
     segments.push({ text: text.slice(cursor) });
   }
   return segments;
+}
+
+export function applyTranscriptSafeFixes(text: string, issues: TranscriptIssue[]): string {
+  const fixes = issues
+    .filter((issue) => issue.safeFix)
+    .sort((a, b) => b.start - a.start);
+  let next = text;
+  for (const issue of fixes) {
+    const before = next.slice(0, issue.start).replace(/[ \t]+$/, "");
+    const after = next.slice(issue.end).replace(/^[ \t]+/, "");
+    const replacement = issue.safeFix?.replacement ?? "";
+    const joiner = before && after && replacement === "" ? " " : "";
+    next = `${before}${replacement}${joiner}${after}`;
+  }
+  return next.replace(/[ \t]{2,}/g, " ");
 }

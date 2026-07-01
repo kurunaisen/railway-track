@@ -21,6 +21,7 @@ import Login from "./Login";
 import { APP_BRAND_ACCENT, APP_BRAND_MAIN, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
 import { FORM_COLUMNS, toDisplayRows } from "./railway/display";
 import {
+  applyTranscriptSafeFixes,
   analyzeTranscriptQuality,
   buildTranscriptQualitySegments,
   type TranscriptIssue,
@@ -104,14 +105,17 @@ function AppFooter() {
 function TranscriptQualityPreview({
   issues,
   segments,
+  onApplySafeFixes,
 }: {
   issues: TranscriptIssue[];
   segments: TranscriptQualitySegment[];
+  onApplySafeFixes: () => void;
 }) {
   if (segments.length === 1 && !segments[0].issue && !segments[0].text.trim()) return null;
 
   const errorCount = issues.filter((issue) => issue.severity === "error").length;
   const warningCount = issues.length - errorCount;
+  const safeFixCount = issues.filter((issue) => issue.safeFix).length;
 
   return (
     <div className="transcript-quality" aria-live="polite">
@@ -127,6 +131,14 @@ function TranscriptQualityPreview({
           <span className="hint">подозрительных фрагментов не найдено</span>
         )}
       </div>
+      {safeFixCount > 0 && (
+        <div className="transcript-quality-actions">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onApplySafeFixes}>
+            Исправить безопасные ASR-ошибки ({safeFixCount})
+          </button>
+          <span className="hint">Удаляются только очевидные лишние числа перед корректной шириной колеи.</span>
+        </div>
+      )}
       <div className="transcript-quality-text" aria-label="Текст с подсветкой подозрительных фрагментов">
         {segments.map((segment, index) =>
           segment.issue ? (
@@ -148,6 +160,7 @@ function TranscriptQualityPreview({
             <li key={issue.id} className={`transcript-quality-item ${issue.severity}`}>
               <strong>{issue.title}</strong>
               <span>{issue.description}</span>
+              {issue.safeFix && <em>Доступно безопасное исправление: {issue.safeFix.label}</em>}
             </li>
           ))}
           {issues.length > 8 && <li className="hint">Ещё предупреждений: {issues.length - 8}</li>}
@@ -447,6 +460,10 @@ export default function App() {
     }
   };
 
+  const handleApplyTranscriptSafeFixes = () => {
+    setTranscriptDraft((current) => applyTranscriptSafeFixes(current, analyzeTranscriptQuality(current)));
+  };
+
   if (authRequired === null) {
     return (
       <div className="app carbon-bg loading-screen">
@@ -631,6 +648,7 @@ export default function App() {
             <TranscriptQualityPreview
               issues={transcriptQualityIssues}
               segments={transcriptQualitySegments}
+              onApplySafeFixes={handleApplyTranscriptSafeFixes}
             />
             <div className="upload-actions" style={{ marginTop: 12 }}>
               <button
