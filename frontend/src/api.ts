@@ -12,6 +12,7 @@ export interface TrackRecord {
   uchastok: string | null;
   peregon: string | null;
   put: string | null;
+  switch: string | null;
   km: string | null;
   piket: string | null;
   obekt: string | null;

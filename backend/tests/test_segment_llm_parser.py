@@ -57,6 +57,25 @@ def test_merge_segment_row_overwrites_full_asr_source():
     assert merged["sourceText"] == block.segment
 
 
+def test_merge_segment_row_inherits_asset_from_segment():
+    block = SegmentedBlock(
+        location="Мурманск",
+        segment="стрелочный перевод номер 10 износ рамного рельса 7 мм",
+    )
+    merged = merge_segment_row(
+        {
+            "location": None,
+            "assetKind": None,
+            "assetNumber": None,
+            "defect": "износ рамного рельса 7 мм",
+            "sourceText": "",
+        },
+        block,
+    )
+    assert merged["assetKind"] == "switch"
+    assert merged["assetNumber"] == "10"
+
+
 def test_structured_by_segments_calls_llm_per_block(monkeypatch):
     blocks = segment_railway_text(MURMANSK)
     calls: list[str] = []

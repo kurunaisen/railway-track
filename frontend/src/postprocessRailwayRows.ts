@@ -348,7 +348,6 @@ function formatSpeedForCell(speedLimit: number | string | null): string {
 }
 
 export function sanitizeRowForExport(row: ParsedRow): ParsedRow {
-  console.log("ROW SOURCE:", row.sourceText);
   const source = normalizeAsrText(row.sourceText || "");
   const assetMarkerCount = countAssetMarkers(source);
 

@@ -203,6 +203,18 @@ def merge_segment_row(row: dict, block: SegmentedBlock) -> dict:
     if not merged.get("location") and block.location:
         merged["location"] = block.location
     merged["sourceText"] = block.segment
+
+    if not merged.get("assetKind") or not merged.get("assetNumber"):
+        from app.services.asr_fixes import normalize_asr_text
+        from app.services.row_segment_extract import _segment_asset
+
+        kind, number = _segment_asset(normalize_asr_text(block.segment))
+        if kind and number:
+            if not merged.get("assetKind"):
+                merged["assetKind"] = kind
+            if not merged.get("assetNumber"):
+                merged["assetNumber"] = number
+
     return merged
 
 

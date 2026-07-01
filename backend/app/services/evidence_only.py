@@ -314,6 +314,16 @@ def track_parts_from_segment(rec: EvidenceRowSource) -> tuple[str | None, str | 
     path_num = explicit_path_number(segment)
     switch_num = explicit_switch_number(segment)
 
+    if not path_num:
+        put = getattr(rec, "put", None)
+        if put and str(put).strip():
+            path_num = str(put).strip()
+
+    if not switch_num:
+        switch = getattr(rec, "switch", None)
+        if switch and str(switch).strip():
+            switch_num = str(switch).strip()
+
     path_display: str | None = None
     if path_num:
         if _main_path_explicit(segment) or _is_peregon_segment(segment):

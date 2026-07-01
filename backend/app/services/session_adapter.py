@@ -79,6 +79,7 @@ def _flat_to_track_out(row: FlatInspectionRow) -> TrackRecordOut:
         uchastok=row.uchastok,
         peregon=row.peregon,
         put=row.put,
+        switch=row.switch,
         km=row.km,
         piket=row.piket,
         obekt=row.obekt,

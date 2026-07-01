@@ -87,6 +87,7 @@ class TrackRecordBase(BaseModel):
     uchastok: str | None = None
     peregon: str | None = None
     put: str | None = None
+    switch: str | None = None
     km: str | None = None
     piket: str | None = None
     obekt: str | None = None
@@ -117,6 +118,7 @@ class TrackRecordUpdate(BaseModel):
     uchastok: str | None = None
     peregon: str | None = None
     put: str | None = None
+    switch: str | None = None
     km: str | None = None
     piket: str | None = None
     obekt: str | None = None
@@ -151,6 +153,7 @@ class LogicalRecordOut(BaseModel):
     index: int
     peregon: str | None = None
     put: str | None = None
+    switch: str | None = None
     km: str | None = None
     piket: str | None = None
     comment: str | None = None
