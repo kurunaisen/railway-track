@@ -14,7 +14,7 @@ from typing import Annotated, Union
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from sqlalchemy.orm import Session
 
@@ -63,7 +63,7 @@ from app.services.inspection_repository import (
     load_structured_records,
 )
 
-from app.services.processing import run_session_processing
+from app.services.session_cleanup import delete_audio_session
 
 from app.services.session_adapter import _flat_to_track_out, audio_file_to_session_out, audio_file_to_summary
 
@@ -92,6 +92,20 @@ MIME_MAP = {
     ".webm": "audio/webm",
 
 }
+
+
+def _audio_content_type(filename: str, mime_type: str | None) -> str:
+    if mime_type:
+        return mime_type
+    ext = Path(filename).suffix.lower()
+    return MIME_MAP.get(ext, "application/octet-stream")
+
+
+def _attachment_filename(name: str) -> str:
+    from urllib.parse import quote
+
+    safe = name.replace('"', "'")
+    return f"attachment; filename=\"{safe}\"; filename*=UTF-8''{quote(name)}"
 
 
 
@@ -972,4 +986,89 @@ def export_excel(
 
     )
 
+
+@router.get("/sessions/{session_id}/audio")
+def download_session_audio(
+    session_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: CurrentUser = Depends(get_current_user),
+):
+    audio = _audio_or_404(db, session_id, current)
+    storage = get_storage()
+    try:
+        local_path = storage.resolve_local_path(audio.stored_path)
+    except Exception as exc:
+        logger.exception("Audio resolve failed for session %s", session_id)
+        raise HTTPException(status_code=404, detail="Аудиофайл недоступен") from exc
+    if not local_path.is_file():
+        raise HTTPException(status_code=404, detail="Аудиофайл не найден")
+
+    log_action(
+        db,
+        action="download_audio",
+        current=current,
+        request=request,
+        resource_type="session",
+        resource_id=session_id,
+    )
+    return FileResponse(
+        path=local_path,
+        media_type=_audio_content_type(audio.original_filename, audio.mime_type),
+        filename=audio.original_filename,
+        headers={"Content-Disposition": _attachment_filename(audio.original_filename)},
+    )
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(
+    session_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: CurrentUser = Depends(get_current_user),
+):
+    audio = _audio_or_404(db, session_id, current, write=True)
+    try:
+        delete_audio_session(db, audio)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    log_action(
+        db,
+        action="session_delete",
+        current=current,
+        request=request,
+        resource_type="session",
+        resource_id=session_id,
+    )
+
+
+@router.delete("/sessions/batch", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sessions_batch(
+    request: Request,
+    session_ids: str = Query(..., description="ID сессий через запятую"),
+    db: Session = Depends(get_db),
+    current: CurrentUser = Depends(get_current_user),
+):
+    ids = [int(part.strip()) for part in session_ids.split(",") if part.strip().isdigit()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="Укажите session_ids")
+
+    for session_id in ids:
+        audio = _audio_or_404(db, session_id, current, write=True)
+        try:
+            delete_audio_session(db, audio)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    db.commit()
+    log_action(
+        db,
+        action="session_delete_batch",
+        current=current,
+        request=request,
+        resource_type="session_batch",
+        resource_id=",".join(str(i) for i in ids),
+    )
 

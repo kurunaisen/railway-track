@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AuthUser } from "../auth";
-import { downloadSessionExcel, listSessionSummaries, type SessionSummary } from "../api";
+import {
+  canEdit,
+  deleteSessionsBatch,
+  downloadSessionAudio,
+  downloadSessionExcel,
+  listSessionSummaries,
+  type SessionSummary,
+} from "../api";
 import { ProfileAvatarPicker } from "./ProfileAvatarPicker";
 import { ProfileAvatar } from "./ProfileAvatar";
 
@@ -11,6 +18,7 @@ type AccountPanelProps = {
   onLogout: () => void;
   onOpenSession: (sessionId: number) => void;
   onAvatarSaved: (avatarId: string) => void;
+  onSessionsDeleted?: (sessionIds: number[]) => void;
 };
 
 function formatDate(iso: string): string {
@@ -39,6 +47,20 @@ function statusLabel(status: string): string {
   return map[status] ?? status;
 }
 
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M3 6h18M8 6V4h8v2m-1 4v7H9v-7m2 0v7m4-7v7"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function AccountPanel({
   open,
   user,
@@ -46,17 +68,32 @@ export function AccountPanel({
   onLogout,
   onOpenSession,
   onAvatarSaved,
+  onSessionsDeleted,
 }: AccountPanelProps) {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [downloadingExcelId, setDownloadingExcelId] = useState<number | null>(null);
+  const [downloadingAudioId, setDownloadingAudioId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const editable = canEdit(user.role);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setSessions(await listSessionSummaries());
+      const list = await listSessionSummaries();
+      setSessions(list);
+      setSelected((prev) => {
+        const ids = new Set(list.map((s) => s.id));
+        const next = new Set<number>();
+        prev.forEach((id) => {
+          if (ids.has(id)) next.add(id);
+        });
+        return next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось загрузить историю");
     } finally {
@@ -77,16 +114,77 @@ export function AccountPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const allSelected = useMemo(
+    () => sessions.length > 0 && sessions.every((s) => selected.has(s.id)),
+    [sessions, selected],
+  );
+
+  const selectedCount = selected.size;
+
   if (!open) return null;
 
-  async function handleDownload(sessionId: number) {
-    setDownloadingId(sessionId);
+  function toggleSelected(sessionId: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelected(new Set());
+      return;
+    }
+    setSelected(new Set(sessions.map((s) => s.id)));
+  }
+
+  async function handleDownloadExcel(sessionId: number) {
+    setDownloadingExcelId(sessionId);
     try {
       await downloadSessionExcel(sessionId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка выгрузки Excel");
     } finally {
-      setDownloadingId(null);
+      setDownloadingExcelId(null);
+    }
+  }
+
+  async function handleDownloadAudio(item: SessionSummary) {
+    setDownloadingAudioId(item.id);
+    try {
+      await downloadSessionAudio(item.id, item.original_name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка скачивания аудио");
+    } finally {
+      setDownloadingAudioId(null);
+    }
+  }
+
+  async function handleDelete(ids: number[]) {
+    if (ids.length === 0) return;
+    const label =
+      ids.length === 1
+        ? "Удалить эту запись? Аудио и таблица будут удалены без восстановления."
+        : `Удалить ${ids.length} записей? Аудио и таблицы будут удалены без восстановления.`;
+    if (!window.confirm(label)) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteSessionsBatch(ids);
+      setSessions((prev) => prev.filter((s) => !ids.includes(s.id)));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      onSessionsDeleted?.(ids);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось удалить");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -130,8 +228,32 @@ export function AccountPanel({
             </button>
           </div>
           <p className="hint account-section-hint">
-            Все ваши аудиозаписи и сгенерированные таблицы. Можно открыть снова или выгрузить Excel.
+            Все ваши аудиозаписи и сгенерированные таблицы. Можно открыть, скачать аудио или Excel, удалить ненужные.
           </p>
+
+          {editable && sessions.length > 0 && (
+            <div className="session-history-toolbar">
+              <label className="session-history-select-all">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  disabled={loading || deleting}
+                />
+                <span>Выбрать все</span>
+              </label>
+              {selectedCount > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm session-history-delete-selected"
+                  disabled={deleting}
+                  onClick={() => void handleDelete([...selected])}
+                >
+                  {deleting ? "…" : `Удалить выбранные (${selectedCount})`}
+                </button>
+              )}
+            </div>
+          )}
 
           {error && <div className="error">{error}</div>}
           {loading && <p className="hint">Загрузка…</p>}
@@ -143,7 +265,17 @@ export function AccountPanel({
           {!loading && sessions.length > 0 && (
             <ul className="session-history-list">
               {sessions.map((item) => (
-                <li key={item.id} className="session-history-item">
+                <li key={item.id} className={`session-history-item${selected.has(item.id) ? " selected" : ""}`}>
+                  {editable && (
+                    <label className="session-history-check" aria-label={`Выбрать ${item.original_name}`}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(item.id)}
+                        onChange={() => toggleSelected(item.id)}
+                        disabled={deleting}
+                      />
+                    </label>
+                  )}
                   <div className="session-history-main">
                     <strong className="session-history-name">{item.original_name}</strong>
                     <span className="session-history-meta">
@@ -171,12 +303,32 @@ export function AccountPanel({
                     </button>
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm"
-                      disabled={!item.has_table || downloadingId === item.id}
-                      onClick={() => void handleDownload(item.id)}
+                      className="btn btn-secondary btn-sm"
+                      disabled={downloadingAudioId === item.id || deleting}
+                      onClick={() => void handleDownloadAudio(item)}
                     >
-                      {downloadingId === item.id ? "…" : "Excel"}
+                      {downloadingAudioId === item.id ? "…" : "Аудио"}
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={!item.has_table || downloadingExcelId === item.id || deleting}
+                      onClick={() => void handleDownloadExcel(item.id)}
+                    >
+                      {downloadingExcelId === item.id ? "…" : "Excel"}
+                    </button>
+                    {editable && (
+                      <button
+                        type="button"
+                        className="btn btn-danger-ghost btn-sm"
+                        title="Удалить"
+                        aria-label={`Удалить ${item.original_name}`}
+                        disabled={deleting}
+                        onClick={() => void handleDelete([item.id])}
+                      >
+                        <TrashIcon />
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

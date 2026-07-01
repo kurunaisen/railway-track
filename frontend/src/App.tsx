@@ -798,6 +798,12 @@ export default function App() {
           onLogout={handleLogout}
           onOpenSession={handleOpenSession}
           onAvatarSaved={(avatarId) => setUser((prev) => (prev ? { ...prev, avatar_id: avatarId } : prev))}
+          onSessionsDeleted={(ids) => {
+            setUploadBatch((prev) => prev.filter((s) => !ids.includes(s.id)));
+            if (session && ids.includes(session.id)) {
+              setSession(null);
+            }
+          }}
         />
       )}
 

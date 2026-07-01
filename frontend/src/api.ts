@@ -247,6 +247,41 @@ export async function downloadSessionExcel(sessionId: number): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadSessionAudio(sessionId: number, suggestedName?: string): Promise<void> {
+  const res = await apiFetch(`${API}/sessions/${sessionId}/audio`);
+  const blob = await res.blob();
+  let filename = suggestedName || `session_${sessionId}.webm`;
+  const disposition = res.headers.get("Content-Disposition");
+  if (disposition) {
+    const starMatch = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    const plainMatch = /filename="([^"]+)"/i.exec(disposition);
+    if (starMatch) filename = decodeURIComponent(starMatch[1]);
+    else if (plainMatch) filename = plainMatch[1];
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function deleteSession(sessionId: number): Promise<void> {
+  await apiFetch(`${API}/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+export async function deleteSessionsBatch(sessionIds: number[]): Promise<void> {
+  if (sessionIds.length === 0) return;
+  if (sessionIds.length === 1) {
+    await deleteSession(sessionIds[0]);
+    return;
+  }
+  const query = encodeURIComponent(sessionIds.join(","));
+  await apiFetch(`${API}/sessions/batch?session_ids=${query}`, { method: "DELETE" });
+}
+
 export async function downloadBatchExcel(sessionIds: number[]): Promise<void> {
   if (sessionIds.length === 0) return;
   if (sessionIds.length === 1) {
