@@ -68,7 +68,7 @@ def test_switch_track_abbreviation():
         obekt="стрелочный перевод",
         raw_text="Перегон Кица-Блокпост, стрелочный перевод номер 3, километр 1384",
     )
-    assert format_track(rec) == "стр.п. 3"
+    assert format_track(rec) == "3 гл.п., стр.п. 3"
 
 
 def test_switch_not_inferred_from_obekt_only():
@@ -119,9 +119,10 @@ def test_path_and_switch_from_record_fields():
     assert format_track(rec) == "5, стр.п. 15"
 
 
-def test_switch_only_without_duplicate_path():
+def test_path_and_switch_same_number_both_shown():
+    """Путь и стр.п. — разные объекты, даже при совпадении номера."""
     rec = Rec(
         put="3",
         raw_text="стрелочный перевод номер 3, дефект на стыке",
     )
-    assert format_track(rec) == "стр.п. 3"
+    assert format_track(rec) == "3, стр.п. 3"

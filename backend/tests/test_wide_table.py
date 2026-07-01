@@ -38,9 +38,9 @@ def test_switch_column_and_object_kind():
         obekt="рельс",
         raw_text="стрелочный перевод номер 3, износ 12 миллиметров",
     )
-    assert format_path(rec) is None
+    assert format_path(rec) == "3"
     assert format_switch(rec) == "стр.п. 3"
-    assert format_object_kind(rec) == "стрелочный перевод"
+    assert format_object_kind(rec) == "путь, стрелочный перевод"
 
 
 def test_path_and_switch_together():
