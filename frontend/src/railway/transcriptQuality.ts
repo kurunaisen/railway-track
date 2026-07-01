@@ -22,6 +22,8 @@ type DraftIssue = Omit<TranscriptIssue, "id">;
 
 const TRACK_GAUGE_MIN_MM = 1510;
 const TRACK_GAUGE_MAX_MM = 1560;
+const WORD_LEFT = "(?<![A-Za-zА-Яа-яЁё0-9])";
+const WORD_RIGHT = "(?![A-Za-zА-Яа-яЁё0-9])";
 
 function addIssue(issues: DraftIssue[], issue: DraftIssue): void {
   if (issue.start < 0 || issue.end <= issue.start) return;
@@ -33,8 +35,16 @@ function isPlausibleGauge(value: number): boolean {
 }
 
 function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
-  const gaugeRe =
-    /\b(?:уширение|ширина)\s+колеи(?<middle>[\s\p{L},.-]{0,30}?)(?<first>\d{3,4})\s+(?<second>\d{3,4})\s*мм\b/giu;
+  const gaugeRe = new RegExp(
+    `${WORD_LEFT}(?:уширение|ширина)\\s+колеи(?<middle>[\\sA-Za-zА-Яа-яЁё,.-]{0,30}?)(?<first>\\d{3,4})\\s+(?<second>\\d{3,4})\\s*мм${WORD_RIGHT}`,
+    "giu",
+  );
+  const looseGaugeRe = new RegExp(
+    `${WORD_LEFT}(?<first>\\d{3,4})\\s+(?<second>\\d{3,4})\\s*мм${WORD_RIGHT}`,
+    "giu",
+  );
+  const railGaugeContextRe = new RegExp(`${WORD_LEFT}коле[яи]${WORD_RIGHT}`, "iu");
+  const seen = new Set<string>();
 
   for (const match of text.matchAll(gaugeRe)) {
     const first = Number(match.groups?.first);
@@ -46,6 +56,7 @@ function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
     const secondStart = base + match[0].lastIndexOf(secondText);
 
     if (!Number.isFinite(first) || !Number.isFinite(second)) continue;
+    seen.add(`${firstStart}:${secondStart + secondText.length}`);
 
     if (!isPlausibleGauge(first) && isPlausibleGauge(second)) {
       addIssue(issues, {
@@ -70,30 +81,59 @@ function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
       description: "В измерении колеи найдено два числа подряд. Возможно, ASR добавил лишнее число.",
     });
   }
+
+  for (const match of text.matchAll(looseGaugeRe)) {
+    const first = Number(match.groups?.first);
+    const second = Number(match.groups?.second);
+    const firstText = match.groups?.first ?? "";
+    const secondText = match.groups?.second ?? "";
+    const base = match.index ?? 0;
+    const firstStart = base + match[0].indexOf(firstText);
+    const secondEnd = base + match[0].lastIndexOf(secondText) + secondText.length;
+    const key = `${firstStart}:${secondEnd}`;
+    if (seen.has(key)) continue;
+    if (!Number.isFinite(first) || !Number.isFinite(second)) continue;
+
+    const context = text.slice(Math.max(0, base - 45), Math.min(text.length, secondEnd + 12));
+    if (!railGaugeContextRe.test(context)) continue;
+    if (!isPlausibleGauge(first) && isPlausibleGauge(second)) {
+      addIssue(issues, {
+        start: firstStart,
+        end: firstStart + firstText.length,
+        severity: "error",
+        title: "Подозрительное число перед измерением колеи",
+        description: `Рядом с колеёй перед "${second} мм" найдено лишнее или ошибочное число "${first}".`,
+        safeFix: {
+          replacement: "",
+          label: `Удалить "${first}"`,
+        },
+      });
+    }
+  }
 }
 
 function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
   const patterns: Array<[RegExp, TranscriptIssueSeverity, string, string]> = [
     [
-      /\bпике\b/giu,
+      new RegExp(`${WORD_LEFT}пике${WORD_RIGHT}`, "giu"),
       "warning",
       "Похоже на неполное слово",
       "Возможно, имелось в виду \"пикет\". Проверьте привязку.",
     ],
     [
-      /\bшомгу\b/giu,
+      new RegExp(`${WORD_LEFT}шомгу${WORD_RIGHT}`, "giu"),
       "error",
       "Подозрительное название",
       "Слово похоже на ASR-искажение названия. Проверьте станцию или перегон.",
     ],
     [
-      /\bмагнититы\b/giu,
+      new RegExp(`${WORD_LEFT}магнититы${WORD_RIGHT}`, "giu"),
       "warning",
       "Проверьте название станции",
       "Возможно, ASR распознал \"Магнетиты\" как \"магнититы\".",
     ],
     [
-      /\b(?:км|километр)\s*(?:пикет|пк)\b/giu,
+      new RegExp(`${WORD_LEFT}(?:км|километр)\\s*(?:пикет|пк)${WORD_RIGHT}`, "giu"),
       "warning",
       "Неполная привязка",
       "После километра не найден номер км. Проверьте привязку км/пк/м.",

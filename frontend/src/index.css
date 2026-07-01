@@ -150,8 +150,9 @@ body {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  min-height: 3.5rem;
-  padding: 0.65rem 0;
+  min-height: 4.1rem;
+  padding-top: max(0.95rem, env(safe-area-inset-top));
+  padding-bottom: 0.95rem;
 }
 
 .logo {
@@ -1118,8 +1119,14 @@ tr.row-warning td {
 }
 
 @media (max-width: 768px) {
+  .header-inner {
+    gap: 0.75rem;
+    min-height: 4rem;
+    padding-top: max(0.85rem, env(safe-area-inset-top));
+    padding-bottom: 0.85rem;
+  }
+
   .header-actions {
-    width: 100%;
     justify-content: flex-end;
   }
 
