@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import Any
 
 from app.services.locations import is_peregon_haul
@@ -17,6 +16,7 @@ from app.services.speed_limit import apply_speed_limit_fields, strip_speed_limit
 from app.services.stations import normalize_station_name
 from app.services.stations import station_names_for_prompt
 from app.services.norms_for_llm import build_norms_summary_for_llm
+from app.services.railway_segment import SegmentedBlock
 from app.services.switch_terminology import build_switch_glossary_for_llm
 
 logger = logging.getLogger(__name__)
@@ -83,14 +83,41 @@ _LLM_DOMAIN_RULES = """ASR и домен:
 - ASR «ширина коли» → «ширина колеи» в defect
 - Явная скорость: отдельная строка rows[] с defect=null, speedLimit=N, sourceText=фраза про скорость"""
 
+_LLM_SEGMENT_RULES = """Ты — модуль структурирования одной строки таблицы из ОДНОГО ASR-сегмента.
+
+Правила:
+1. На входе один segment (+ location_hint). На выходе — один объект ParsedRow (JSON Schema railway_row).
+2. assetKind: "track" если в segment «путь N»; "switch" если «стрелочный перевод N»; иначе null.
+3. assetNumber — только номер из этого segment, не из других фрагментов.
+4. «в острие остряка», «на крестовине», «по прямому направлению» → note, не defect.
+5. speedLimit — только если явно в segment; иначе null.
+6. Не придумывай reference, note, assetNumber, location — только из segment или location_hint.
+7. sourceText — дословный segment (обязательно).
+8. null для отсутствующих полей."""
+
+_LLM_SEGMENT_FIELDS = """Поля ParsedRow:
+- location, assetKind, assetNumber, reference, defect, speedLimit, note, sourceText"""
+
 _LLM_SYSTEM_RULES_BASE = (
     _LLM_CORE_RULES + "\n\n" + _LLM_JSON_SCHEMA + "\n\n" + _LLM_DOMAIN_RULES
 )
+
+_LLM_SEGMENT_SYSTEM_RULES_BASE = _LLM_SEGMENT_RULES + "\n\n" + _LLM_SEGMENT_FIELDS
 
 
 def build_llm_system_rules() -> str:
     return (
         _LLM_SYSTEM_RULES_BASE
+        + "\n"
+        + build_norms_summary_for_llm()
+        + "\n\n"
+        + build_switch_glossary_for_llm()
+    )
+
+
+def build_llm_segment_system_rules() -> str:
+    return (
+        _LLM_SEGMENT_SYSTEM_RULES_BASE
         + "\n"
         + build_norms_summary_for_llm()
         + "\n\n"
@@ -128,6 +155,26 @@ def _reference_fields(reference: str | None) -> tuple[str | None, str | None]:
     return _extract_km(norm), _extract_piket(norm)
 
 
+def _validate_row_dict(row: dict, *, path: str) -> None:
+    if not isinstance(row, dict):
+        raise ValueError(f"{path} must be object")
+    missing = _ROW_REQUIRED - row.keys()
+    if missing:
+        raise ValueError(f"{path} missing fields: {sorted(missing)}")
+    if not isinstance(row.get("sourceText"), str):
+        raise ValueError(f"{path}.sourceText must be string")
+    kind = row.get("assetKind")
+    if kind is not None and kind not in ("track", "switch"):
+        raise ValueError(f"{path}.assetKind must be track, switch or null")
+
+
+def validate_parsed_row(data: Any) -> dict:
+    if not isinstance(data, dict):
+        raise ValueError("ParsedRow must be an object")
+    _validate_row_dict(data, path="ParsedRow")
+    return data
+
+
 def validate_structured_payload(data: Any) -> dict:
     if not isinstance(data, dict):
         raise ValueError("LLM JSON must be an object")
@@ -135,17 +182,26 @@ def validate_structured_payload(data: Any) -> dict:
     if not isinstance(rows, list):
         raise ValueError('LLM JSON must contain "rows" array')
     for i, row in enumerate(rows):
-        if not isinstance(row, dict):
-            raise ValueError(f"rows[{i}] must be object")
-        missing = _ROW_REQUIRED - row.keys()
-        if missing:
-            raise ValueError(f"rows[{i}] missing fields: {sorted(missing)}")
-        if not isinstance(row.get("sourceText"), str):
-            raise ValueError(f"rows[{i}].sourceText must be string")
-        kind = row.get("assetKind")
-        if kind is not None and kind not in ("track", "switch"):
-            raise ValueError(f"rows[{i}].assetKind must be track, switch or null")
+        _validate_row_dict(row, path=f"rows[{i}]")
     return data
+
+
+def parse_llm_row_json(content: str) -> dict:
+    content = content.strip()
+    if content.startswith("```"):
+        lines = content.split("\n")
+        content = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    data = json.loads(content)
+    return validate_parsed_row(data)
+
+
+def merge_segment_row(row: dict, block: SegmentedBlock) -> dict:
+    merged = dict(row)
+    if not merged.get("location") and block.location:
+        merged["location"] = block.location
+    if not (merged.get("sourceText") or "").strip():
+        merged["sourceText"] = block.segment
+    return merged
 
 
 def parse_llm_json(content: str) -> dict:

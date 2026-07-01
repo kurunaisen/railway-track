@@ -1,7 +1,7 @@
 """Мурманск: стр.п. 10; «пусть 15» → путь 15; острие остряка → примечание."""
 
 from app.services.asr_fixes import fix_asr_transcript
-from app.services.canonical_model import _split_by_location
+from app.services.railway_segment import segment_railway_text
 from app.services.inspection_form import record_to_form_row
 from app.services.normalizer import normalize_all
 from app.services.parsing_pipeline import run_parsing_pipeline
@@ -58,12 +58,12 @@ def test_asr_pust_to_path():
 
 
 def test_split_path_15_before_path_12():
-    parts = _split_by_location(fix_asr_transcript(MURMANSK))
-    assert len(parts) == 4
-    assert "стрелочный перевод" in parts[0].lower()
-    assert "путь 15" in parts[1].lower()
-    assert "путь 12" in parts[2].lower()
-    assert "путь 11" in parts[3].lower()
+    blocks = segment_railway_text(MURMANSK)
+    assert len(blocks) == 4
+    assert "стрелочный перевод" in blocks[0].segment.lower()
+    assert blocks[1].segment.lower().startswith("путь 15")
+    assert "путь 12" in blocks[2].segment.lower()
+    assert blocks[3].segment.lower().startswith("путь 11")
 
 
 def test_wear_switch_only_tip_in_note():

@@ -11,6 +11,7 @@ from app.services.llm import parse_with_primary_llm
 from app.services.llm.claude_reviewer import review_all_disputed
 from app.services.llm.json_schema import count_structured_records
 from app.services.parser import ParseResult, TranscriptSegment, detect_unknown_terms
+from app.services.railway_segment import segment_railway_text
 from app.services.record_expander import ensure_minimum_rows, expand_blocks_to_rows
 from app.services.segmentation import LogicalBlock, segment_logical_blocks
 
@@ -46,11 +47,12 @@ def run_parsing_pipeline(
             llm_records, structured = parse_with_primary_llm(full_text, segments, blocks_payload)
             n_llm_logical, n_llm_pos = count_structured_records(structured or {"rows": []})
             llm_rows = enforce_single_position_per_row(llm_records)
+            n_asr_segments = len(segment_railway_text(full_text)) or 1
 
             llm_ok = (
-                n_llm_logical >= n_blocks
+                n_llm_logical >= n_asr_segments
                 and n_llm_pos >= n_llm_logical
-                and len(llm_rows) >= len(regex_baseline)
+                and len(llm_rows) >= n_asr_segments
             )
             if llm_ok:
                 records = llm_rows
@@ -65,8 +67,8 @@ def run_parsing_pipeline(
                 errors.append({
                     "row": -1,
                     "error": (
-                        f"LLM ({settings.llm_primary_parser}): {n_llm_logical} records / {n_llm_pos} items "
-                        f"при {n_blocks} блоках и {len(regex_baseline)} regex-строках — fallback на regex"
+                        f"LLM ({settings.llm_primary_parser}): {n_llm_logical} rows "
+                        f"при {n_asr_segments} ASR-сегментах — fallback на regex"
                     ),
                     "severity": "warning",
                 })

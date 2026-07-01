@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.services.asr_fixes import fix_asr_transcript
-from app.services.canonical_model import _split_by_location
+from app.services.railway_segment import segment_railway_text
 from app.services.parser import (
     ParsedRecord,
     _extract_put,
@@ -54,13 +54,13 @@ def propagate_switch_context(
     source_text: str | None,
 ) -> list[ParsedRecord]:
     """
-    Сверяет put/switch с сегментами _split_by_location и перезаписывает поля.
+    Сверяет put/switch с сегментами segment_railway_text и перезаписывает поля.
     """
     if not source_text or not records:
         return records
 
     source_text = fix_asr_transcript(source_text)
-    parts = _split_by_location(source_text)
+    parts = [b.segment for b in segment_railway_text(source_text)]
     if not parts:
         parts = [source_text]
 

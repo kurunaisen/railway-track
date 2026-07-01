@@ -1,20 +1,11 @@
-"""FR 15.3 — Claude как альтернативный основной парсер (A/B тесты)."""
+"""FR 15.3 — Claude: сегмент → ParsedRow."""
 
 from __future__ import annotations
 
-import json
 import logging
 
-from anthropic import Anthropic
-
 from app.config import settings
-from app.services.llm.extraction_schema import RAILWAY_EXTRACTION_SCHEMA
-from app.services.llm.json_schema import (
-    build_llm_system_rules,
-    parse_llm_json,
-    structured_to_parsed_rows,
-)
-from app.services.llm.openai_parser import _build_user_payload
+from app.services.llm.segment_llm_parser import parse_structured_by_segments, parse_with_segments_llm
 from app.services.parser import ParsedRecord, TranscriptSegment
 
 logger = logging.getLogger(__name__)
@@ -25,27 +16,9 @@ def parse_structured_with_claude(
     segments: list[TranscriptSegment] | None = None,
     logical_blocks: list[dict] | None = None,
 ) -> dict:
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY не задан")
-
-    client = Anthropic(api_key=settings.anthropic_api_key)
-    payload = _build_user_payload(full_text, segments, logical_blocks)
-    payload["json_schema"] = RAILWAY_EXTRACTION_SCHEMA
-    message = client.messages.create(
-        model=settings.anthropic_model,
-        max_tokens=4096,
-        system=build_llm_system_rules(),
-        messages=[
-            {
-                "role": "user",
-                "content": json.dumps(payload, ensure_ascii=False),
-            }
-        ],
-    )
-    text = message.content[0].text if message.content else "{}"
-    data = parse_llm_json(text)
-    logger.info("Claude structured: %d rows", len(data.get("rows", [])))
-    return data
+    if settings.llm_primary_parser != "anthropic":
+        logger.debug("Claude structured called while primary=%s", settings.llm_primary_parser)
+    return parse_structured_by_segments(full_text, segments, logical_blocks)
 
 
 def parse_with_claude(
@@ -53,5 +26,5 @@ def parse_with_claude(
     segments: list[TranscriptSegment] | None = None,
     logical_blocks: list[dict] | None = None,
 ) -> list[ParsedRecord]:
-    data = parse_structured_with_claude(full_text, segments, logical_blocks)
-    return structured_to_parsed_rows(data)
+    rows, _ = parse_with_segments_llm(full_text, segments, logical_blocks)
+    return rows

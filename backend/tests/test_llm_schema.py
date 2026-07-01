@@ -10,11 +10,15 @@ import pytest
 
 from app.services.llm.extraction_schema import (
     RAILWAY_EXTRACTION_SCHEMA,
+    RAILWAY_ROW_EXTRACTION_SCHEMA,
     openai_response_format,
+    openai_row_response_format,
 )
 from app.services.llm.json_schema import (
     parse_llm_json,
+    parse_llm_row_json,
     structured_to_parsed_rows,
+    validate_parsed_row,
     validate_structured_payload,
 )
 
@@ -42,6 +46,18 @@ SAMPLE = {
         },
     ]
 }
+
+
+def test_openai_row_response_format():
+    fmt = openai_row_response_format()
+    assert fmt["json_schema"]["name"] == "railway_row"
+    assert fmt["json_schema"]["strict"] is True
+    assert "sourceText" in fmt["json_schema"]["schema"]["required"]
+
+
+def test_validate_parsed_row():
+    row = validate_parsed_row(SAMPLE["rows"][0])
+    assert row["assetKind"] == "track"
 
 
 def test_openai_response_format_uses_json_schema():

@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import re
 
-from app.services.asr_fixes import fix_asr_transcript
 from app.services.canonical_model import (
     LogicalRecordContext,
     PositionItem,
     _inherit_location_fields,
-    _is_station_block,
-    _split_by_location,
     extract_logical_record_context,
     parse_position,
     position_to_row,
 )
 from app.services.parser import ParsedRecord, _normalize_text
 from app.services.rail_side import extract_rail_side_note, strip_rail_side_phrases
+from app.services.railway_segment import segment_railway_text
+from app.services.stations import normalize_station_name
 
 _PATH_LEAD_RE = re.compile(
     r"^(?:\d+\s+)?(?:главн\w*\s+)?путь\s*(?:№|номер|n\.?)?\s*\d+\s+",
@@ -53,20 +52,21 @@ def _parse_segment_position(loc_text: str) -> PositionItem:
 
 
 def build_records_from_asr_segments(source_text: str) -> list[ParsedRecord]:
-    """Одна строка таблицы на каждый фрагмент «путь K …» / стрелку из _split_by_location."""
-    source_text = fix_asr_transcript(source_text)
-    parts = _split_by_location(source_text)
-    if not parts:
+    """Одна строка таблицы на каждый сегмент segment_railway_text (путь / стрелочный перевод)."""
+    blocks = segment_railway_text(source_text)
+    if not blocks:
         return []
 
     inherited = LogicalRecordContext(logical_record_index=0)
     rows: list[ParsedRecord] = []
 
-    for i, loc_text in enumerate(parts):
+    for i, block in enumerate(blocks):
+        loc_text = block.segment
         ctx = extract_logical_record_context(loc_text, i, None, None)
         _inherit_location_fields(ctx, inherited, loc_text)
 
-        if _is_station_block(loc_text):
+        if block.location:
+            ctx.uchastok = normalize_station_name(block.location) or block.location
             ctx.peregon = None
             ctx.km = None
             ctx.piket = None
@@ -75,6 +75,7 @@ def build_records_from_asr_segments(source_text: str) -> list[ParsedRecord]:
             inherited.km = None
             inherited.piket = None
             inherited.station_active = True
+            inherited.uchastok = ctx.uchastok
 
         pos = _parse_segment_position(loc_text)
         row = position_to_row(ctx, pos)
