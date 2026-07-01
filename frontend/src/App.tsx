@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AudioSession } from "./api";
 import {
   PIPELINE_STEPS,
@@ -506,13 +506,10 @@ export default function App() {
   const displayRows = toDisplayRows(railwayRows);
   const warningCount = railwayRows.reduce((n, row) => n + (row.warnings?.length ?? 0), 0);
   const hasTranscript = Boolean(transcriptDraft.trim());
-  const transcriptQualityIssues = useMemo(
-    () => analyzeTranscriptQuality(transcriptDraft),
-    [transcriptDraft],
-  );
-  const transcriptQualitySegments = useMemo(
-    () => buildTranscriptQualitySegments(transcriptDraft, transcriptQualityIssues),
-    [transcriptDraft, transcriptQualityIssues],
+  const transcriptQualityIssues = analyzeTranscriptQuality(transcriptDraft);
+  const transcriptQualitySegments = buildTranscriptQualitySegments(
+    transcriptDraft,
+    transcriptQualityIssues,
   );
 
   const pendingUploadCount = uploadBatch.filter((s) => s.status === "uploaded").length;
