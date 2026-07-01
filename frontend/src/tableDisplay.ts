@@ -1,11 +1,11 @@
-import type { WideTable } from "./api";
+import type { WideTable, TrackRecord } from "./api";
 import { parsedRowsFromTrackRecords } from "./parsedRowsFromRecords";
 import {
-  RailwayDisplayRow,
+  type ParsedRow,
+  type RailwayDisplayRow,
   sanitizeRowsForExport,
   toDisplayRows,
 } from "./postprocessRailwayRows";
-import type { TrackRecord } from "./api";
 
 export const EVIDENCE_FORM_COLUMNS: (keyof RailwayDisplayRow)[] = [
   "Nп/п",
@@ -26,16 +26,19 @@ function displayRowToRecord(row: RailwayDisplayRow): Record<string, string | nul
   return out;
 }
 
-/** Evidence-only таблица для UI: sanitize → toDisplayRows → WideTable */
-export function buildEvidenceFormTable(records: TrackRecord[]): WideTable | null {
-  if (records.length === 0) return null;
-
-  const parsedRows = parsedRowsFromTrackRecords(records);
-  const sanitizedRows = sanitizeRowsForExport(parsedRows);
-  const displayRows = toDisplayRows(sanitizedRows);
-
+/** ParsedRow[] → WideTable (narrative / preview) */
+export function buildFormTableFromParsedRows(rows: ParsedRow[]): WideTable | null {
+  if (rows.length === 0) return null;
+  const sanitized = sanitizeRowsForExport(rows);
+  const displayRows = toDisplayRows(sanitized);
   return {
     columns: [...EVIDENCE_FORM_COLUMNS],
     rows: displayRows.map(displayRowToRecord),
   };
+}
+
+/** Evidence-only таблица для UI: sanitize → toDisplayRows → WideTable */
+export function buildEvidenceFormTable(records: TrackRecord[]): WideTable | null {
+  if (records.length === 0) return null;
+  return buildFormTableFromParsedRows(parsedRowsFromTrackRecords(records));
 }

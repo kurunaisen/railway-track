@@ -75,6 +75,14 @@ export function normalizeAsrText(input: string): string {
       .replace(/\bколи\b/gi, "колеи")
       .replace(/\bстр[.\s]*п[.\s]?\b/gi, "стрелочный перевод ")
       .replace(/\bострии\s+остряка\b/gi, "острие остряка")
+      .replace(/(?<![\p{L}\d])(\d+)\s+путь(?![\p{L}\d])/giu, "путь $1")
+      .replace(/(?<![\p{L}]\s)(\d+)\s+звено(?![\p{L}\d])/giu, "звено $1")
+      .replace(/(?<![\p{L}\d])пике(?![\p{L}\d])/giu, "пикет")
+      .replace(/(?<![\p{L}\d])пикет(?![\p{L}\d])/giu, "пк")
+      .replace(/(?<![\p{L}\d])километр(?:а|е|ов)?(?![\p{L}\d])/giu, "км")
+      .replace(/(?<![\p{L}\d])метр(?:а|ов)?\s+(\d{1,3})(?![\p{L}\d])/giu, "$1 м")
+      .replace(/(?<![\p{L}\d])(\d{1,3})\s+метр(?:а|ов)?(?![\p{L}\d])/giu, "$1 м")
+      .replace(/(?<![\p{L}\d])на\s+станции(?![\p{L}\d])/giu, "станция")
   );
 }
 
@@ -98,10 +106,16 @@ function toTitleCaseRu(value: string): string {
     .join(" ");
 }
 
+const CYR_WORD_BEFORE = String.raw`(?<![\p{L}\d])`;
+const CYR_WORD_AFTER = String.raw`(?![\p{L}\d])`;
+
 export function countAssetMarkers(sourceText: string): number {
   const text = normalizeAsrText(sourceText);
   const matches = text.match(
-    /\b(?:путь\s+\d+|стрелоч(?:ный|ного)\s+перевод(?:\s*(?:№|номер))?\s*\d+)\b/gi
+    new RegExp(
+      `${CYR_WORD_BEFORE}(?:путь\\s+\\d+|стрелоч(?:ный|ного)\\s+перевод(?:\\s*(?:№|номер))?\\s*\\d+)${CYR_WORD_AFTER}`,
+      "giu"
+    )
   );
   return matches?.length ?? 0;
 }
@@ -109,17 +123,39 @@ export function countAssetMarkers(sourceText: string): number {
 export function detectLocationFromSource(sourceText: string): string | null {
   const text = normalizeAsrText(sourceText);
 
+  const stationMatch = text.match(
+    /(?:^|[^\p{L}\d])станция\s+(.+?)(?=\s+(?:путь\s+\d+|звено\s+\d+|\d{1,4}\s*км|отсутствует|не\s+закручен|(?:уширение|ширина)\s+колеи|$))/iu
+  );
+  if (stationMatch?.[1]) {
+    const value = normalizeSpaces(stationMatch[1]).replace(/[.,;:]+$/g, "");
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : null;
+  }
+
+  const perigonMatch = text.match(
+    /(?:^|[^\p{L}\d])перегон\s+(.+?)(?=\s+\d{1,4}\s*км|\s+станция(?=[^\p{L}\d]|$)|$)/iu
+  );
+  if (perigonMatch?.[1]) {
+    const value = normalizeSpaces(`перегон ${perigonMatch[1]}`).replace(/[.,;:]+$/g, "");
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : null;
+  }
+
+  return null;
+}
+
+export function extractReferenceFromSource(sourceText: string): string | null {
+  const text = normalizeAsrText(sourceText);
+
   const match = text.match(
-    /\bстанц(?:ия|ии)\s+(.+?)(?=\s+(?:путь\s+\d+|стрелоч(?:ный|ного)\s+перевод(?:\s*(?:№|номер))?\s*\d+)|$)/i
+    /(?:^|[^\p{L}\d])(\d{1,4})\s*км(?:\s*(?:пк)\s*(\d{1,2}))?(?:\s*(\d{1,3})\s*м)?(?=[^\p{L}\d]|$)/iu
   );
 
   if (!match?.[1]) return null;
 
-  const location = normalizeSpaces(match[1])
-    .replace(/[.,;:]+$/g, "")
-    .trim();
+  const parts = [`${match[1]} км`];
+  if (match[2]) parts.push(`пк ${match[2]}`);
+  if (match[3]) parts.push(`${match[3]} м`);
 
-  return location ? toTitleCaseRu(location) : null;
+  return parts.join(", ");
 }
 
 export function detectAssetFromSource(
@@ -128,13 +164,18 @@ export function detectAssetFromSource(
   const text = normalizeAsrText(sourceText);
 
   const switchMatch = text.match(
-    /\bстрелоч(?:ный|ного)\s+перевод(?:\s*(?:№|номер))?\s*(\d+)\b/i
+    new RegExp(
+      `${CYR_WORD_BEFORE}стрелоч(?:ный|ного)\\s+перевод(?:\\s*(?:№|номер))?\\s*(\\d+)${CYR_WORD_AFTER}`,
+      "iu"
+    )
   );
   if (switchMatch?.[1]) {
     return { kind: "switch", number: switchMatch[1] };
   }
 
-  const trackMatch = text.match(/\bпуть\s+(\d+)\b/i);
+  const trackMatch = text.match(
+    new RegExp(`${CYR_WORD_BEFORE}путь\\s+(\\d+)${CYR_WORD_AFTER}`, "iu")
+  );
   if (trackMatch?.[1]) {
     return { kind: "track", number: trackMatch[1] };
   }
@@ -366,7 +407,8 @@ export function sanitizeRowForExport(row: ParsedRow): ParsedRow {
   const normalizedAssetNumber = detectedAsset?.number ?? row.assetNumber ?? null;
 
   const normalizedLocation = normalizeLocationValue(row.location, source);
-  const normalizedReference = normalizeReferenceValue(row.reference);
+  const normalizedReference =
+    normalizeReferenceValue(row.reference) ?? extractReferenceFromSource(source);
 
   const explicitSpeed = sourceLooksLikeSingleSegment ? parseExplicitSpeed(source) : null;
   const normalizedSpeed = explicitSpeed !== null ? explicitSpeed : null;

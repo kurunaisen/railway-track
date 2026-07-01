@@ -8,6 +8,7 @@ export {
   dashIfEmpty,
   detectAssetFromSource,
   detectLocationFromSource,
+  extractReferenceFromSource,
   formatAssetForCell,
   normalizeAsrText,
   normalizeSpaces,

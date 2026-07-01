@@ -1,5 +1,6 @@
 import type { AudioSession, TrackRecord, WideTable } from "./api";
-import { buildEvidenceFormTable } from "./tableDisplay";
+import { parseRailwayNarrative, narrativeMatches } from "./parseRailwayNarrative";
+import { buildEvidenceFormTable, buildFormTableFromParsedRows } from "./tableDisplay";
 
 export type MergedTableView = {
   records: TrackRecord[];
@@ -73,9 +74,14 @@ export function mergeBatchSessions(sessions: AudioSession[]): MergedTableView | 
   if (processed.length === 1) {
     const only = processed[0];
     const records = only.records;
+    const recordsForm =
+      buildEvidenceFormTable(records) ??
+      (only.full_transcript && narrativeMatches(only.full_transcript)
+        ? buildFormTableFromParsedRows(parseRailwayNarrative(only.full_transcript))
+        : null);
     return {
       records,
-      records_form: buildEvidenceFormTable(records),
+      records_form: recordsForm,
       records_wide: only.records_wide,
       positions_count: only.positions_count || only.records.length,
       unknown_terms: only.unknown_terms,
@@ -88,10 +94,21 @@ export function mergeBatchSessions(sessions: AudioSession[]): MergedTableView | 
 
   const wideTables = processed.map((s) => s.records_wide).filter(Boolean) as WideTable[];
   const records = processed.flatMap((s) => s.records);
+  const recordsForm =
+    buildEvidenceFormTable(records) ??
+    (() => {
+      const transcript = processed
+        .map((s) => s.full_transcript)
+        .filter(Boolean)
+        .join(" ");
+      return transcript && narrativeMatches(transcript)
+        ? buildFormTableFromParsedRows(parseRailwayNarrative(transcript))
+        : null;
+    })();
 
   return {
     records,
-    records_form: buildEvidenceFormTable(records),
+    records_form: recordsForm,
     records_wide: mergeWideTables(wideTables),
     positions_count: processed.reduce((n, s) => n + (s.positions_count || s.records.length), 0),
     unknown_terms: mergeUnknownTerms(processed),

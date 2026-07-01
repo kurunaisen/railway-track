@@ -11,8 +11,11 @@ from app.services.llm import parse_with_primary_llm
 from app.services.llm.claude_reviewer import review_all_disputed
 from app.services.llm.json_schema import count_structured_records
 from app.services.parser import ParseResult, TranscriptSegment, detect_unknown_terms
+from app.services.parse_railway_narrative import (
+    parse_railway_narrative_to_records,
+    prefer_narrative_parser,
+)
 from app.services.railway_segment import segment_railway_text
-from app.services.record_expander import ensure_minimum_rows, expand_blocks_to_rows
 from app.services.segmentation import LogicalBlock, segment_logical_blocks
 
 logger = logging.getLogger(__name__)
@@ -41,8 +44,15 @@ def run_parsing_pipeline(
     # Базовый путь без LLM (regex / canonical)
     regex_baseline = enforce_single_position_per_row(expand_blocks_to_rows(blocks))
     records = regex_baseline
+    narrative_records: list | None = None
 
-    if _llm_available():
+    if prefer_narrative_parser(full_text):
+        narrative_records = parse_railway_narrative_to_records(full_text)
+        if narrative_records:
+            records = narrative_records
+            logger.info("Narrative parser: %d rows", len(records))
+
+    if _llm_available() and settings.parser_mode != "narrative":
         try:
             llm_records, structured = parse_with_primary_llm(full_text, segments, blocks_payload)
             n_llm_logical, n_llm_pos = count_structured_records(structured or {"rows": []})
@@ -72,7 +82,7 @@ def run_parsing_pipeline(
                     ),
                     "severity": "warning",
                 })
-                records = regex_baseline
+                records = narrative_records if narrative_records else regex_baseline
         except Exception as exc:
             logger.warning("LLM parser failed: %s", exc)
             errors.append({

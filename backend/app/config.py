@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 Role = Literal["admin", "operator", "viewer"]
 StorageBackend = Literal["local", "s3", "supabase"]
 AsrProvider = Literal["faster-whisper", "yandex"]
-ParserMode = Literal["regex", "openai", "hybrid"]
+ParserMode = Literal["regex", "openai", "hybrid", "narrative"]
 LlmPrimaryParser = Literal["openai", "anthropic"]
 TableExportMode = Literal["evidenceOnly", "normsEnriched"]
 
