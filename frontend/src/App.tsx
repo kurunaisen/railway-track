@@ -4,7 +4,6 @@ import {
   PIPELINE_STEPS,
   canEdit,
   confirmSession,
-  downloadBatchExcel,
   fieldLabel,
   formatTime,
   getJob,
@@ -15,11 +14,13 @@ import {
   saveSession,
   uploadAudio,
 } from "./api";
+import { downloadRailwayRowsXlsx } from "./railwayExcel";
+import { parsedRowsFromTrackRecords } from "./parsedRowsFromRecords";
 import { type AuthUser, checkHealth, clearAuth, fetchMe, getUser } from "./auth";
 import { healthUrl } from "./config";
 import Login from "./Login";
 import { APP_BRAND_ACCENT, APP_BRAND_MAIN, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
-import { pickTableView } from "./mergeSessions";
+import { pickTableView, type MergedTableView } from "./mergeSessions";
 import { AccountPanel } from "./profile/AccountPanel";
 import { ProfileAvatar } from "./profile/ProfileAvatar";
 
@@ -342,16 +343,19 @@ export default function App() {
     }
   };
 
-  const handleExcelDownload = async () => {
+  const handleExcelDownload = () => {
     const view = pickTableView(session, uploadBatch);
-    if (!view || view.session_ids.length === 0) return;
-    setLoading(true);
+    if (!view || view.records.length === 0) return;
+
     try {
-      await downloadBatchExcel(view.session_ids);
+      const parsedRows = parsedRowsFromTrackRecords(view.records);
+      downloadRailwayRowsXlsx(parsedRows, {
+        fileName: excelFileName(view),
+        sheetName: "Ведомость",
+        includeSourceText: false,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка выгрузки Excel");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -643,7 +647,7 @@ export default function App() {
                     </button>
                   </>
                 )}
-                <button type="button" className="btn btn-primary" onClick={() => void handleExcelDownload()} disabled={loading}>
+                <button type="button" className="btn btn-primary" onClick={handleExcelDownload} disabled={loading}>
                   Excel
                 </button>
               </div>
@@ -823,4 +827,12 @@ function statusLabel(status: string): string {
     error: "Ошибка",
   };
   return map[status] ?? status;
+}
+
+function excelFileName(view: MergedTableView): string {
+  if (view.source_names.length === 1) {
+    const base = view.source_names[0].replace(/\.[^.]+$/, "").replace(/[^\w\u0400-\u04FF.-]+/g, "_");
+    return `${base || "vedomost"}-defekty.xlsx`;
+  }
+  return `vedomost-${view.session_ids.length}-sessions.xlsx`;
 }

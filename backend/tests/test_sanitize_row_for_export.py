@@ -1,9 +1,8 @@
 """sanitizeRowForExport — порт TS-патча evidence-only."""
 
 from app.services.asr_pipeline import asr_text_to_parsed_rows
-from app.services.sanitize_row_for_export import (
+from app.services.postprocess_railway_rows import (
     extract_deterministic_defect,
-    remove_duplicate_note_phrases,
     sanitize_row_for_export,
 )
 
@@ -67,7 +66,13 @@ def test_explicit_speed_kept():
 
 
 def test_note_dedupe():
-    assert remove_duplicate_note_phrases("в острие остряка; в острии остряка") == "в острие остряка"
+    row = sanitize_row_for_export(
+        _row(
+            MURMANSK_SEGMENTS[0],
+            note="в острие остряка; в острии остряка",
+        )
+    )
+    assert row["note"] == "в острие остряка"
 
 
 def test_pipeline_applies_sanitize():

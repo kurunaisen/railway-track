@@ -50,6 +50,13 @@ def test_merge_segment_row_fills_location_and_source():
     assert merged["sourceText"] == block.segment
 
 
+def test_merge_segment_row_overwrites_full_asr_source():
+    block = SegmentedBlock(location="Мурманск", segment="путь 15 ширина колеи 1544")
+    full = "станция мурманск стрелочный перевод 10 путь 15 ширина колеи 1544 путь 12"
+    merged = merge_segment_row({**SAMPLE_ROW, "sourceText": full}, block)
+    assert merged["sourceText"] == block.segment
+
+
 def test_structured_by_segments_calls_llm_per_block(monkeypatch):
     blocks = segment_railway_text(MURMANSK)
     calls: list[str] = []

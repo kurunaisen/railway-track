@@ -60,3 +60,14 @@ def test_murmansk_no_mixed_track_and_switch():
         kind = row.get("assetKind")
         assert kind in ("track", "switch")
         assert row.get("assetNumber")
+
+
+def test_each_row_source_text_is_own_segment_only():
+    from app.services.railway_segment import segment_railway_text
+
+    blocks = segment_railway_text(MURMANSK_CANONICAL)
+    rows = _rows()
+    assert len(rows) == len(blocks) == 4
+    for row, block in zip(rows, blocks):
+        assert row["sourceText"] == block.segment
+        assert "путь 12" not in row["sourceText"] or block.segment.startswith("путь 12")

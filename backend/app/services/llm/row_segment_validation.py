@@ -50,6 +50,7 @@ def _fix_tip_in_defect(row: ParsedRow) -> None:
 
 def validate_rows_for_segment(segment: str, rows: list[ParsedRow]) -> list[ParsedRow]:
     normalized = normalize_asr_text(segment)
+    segment_source = (segment or "").strip()
 
     track_match = _TRACK_PREFIX_RE.match(normalized)
     switch_match = _SWITCH_PREFIX_RE.match(normalized)
@@ -58,6 +59,10 @@ def validate_rows_for_segment(segment: str, rows: list[ParsedRow]) -> list[Parse
     result: list[ParsedRow] = []
     for row in rows:
         fixed = dict(row)
+
+        # sourceText — только этот ASR-сегмент, не весь обход
+        if segment_source:
+            fixed["sourceText"] = segment_source
 
         if track_match:
             fixed["assetKind"] = "track"

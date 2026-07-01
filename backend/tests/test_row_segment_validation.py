@@ -67,3 +67,19 @@ def test_tip_appends_to_existing_note():
     )[0]
     assert "левая нить" in row["note"]
     assert "остри" in row["note"].lower()
+
+
+def test_source_text_forced_to_segment_not_full_asr():
+    """LLM иногда кладёт весь обход в sourceText — validate перезаписывает сегментом."""
+    segment = "путь 15 ширина колеи 1544 мм"
+    full_asr = (
+        "Станция мурманск стрелочный перевод номер 10 износ рамного рельса 7 мм "
+        "острие остряка путь 15 ширина колеи 1544 мм путь 12 куст"
+    )
+    row = validate_rows_for_segment(
+        segment,
+        [{**BASE_ROW, "sourceText": full_asr, "defect": "ширина колеи 1544 мм"}],
+    )[0]
+    assert row["sourceText"] == segment
+    assert "путь 12" not in row["sourceText"]
+    assert "стрелочный перевод" not in row["sourceText"]

@@ -1,4 +1,5 @@
 import type { AudioSession, TrackRecord, WideTable } from "./api";
+import { buildEvidenceFormTable } from "./tableDisplay";
 
 export type MergedTableView = {
   records: TrackRecord[];
@@ -11,8 +12,6 @@ export type MergedTableView = {
   session_ids: number[];
   source_names: string[];
 };
-
-const FORM_INDEX_COLUMN = "Nп/п";
 
 function mergeWideTables(tables: WideTable[]): WideTable | null {
   if (tables.length === 0) return null;
@@ -31,20 +30,6 @@ function mergeWideTables(tables: WideTable[]): WideTable | null {
       return normalized;
     })
   );
-  return { columns, rows };
-}
-
-function mergeFormTables(tables: WideTable[]): WideTable | null {
-  if (tables.length === 0) return null;
-  const columns = [...tables[0].columns];
-  const rows: Record<string, string | null>[] = [];
-  for (const table of tables) {
-    for (const row of table.rows) {
-      const copy = { ...row };
-      copy[FORM_INDEX_COLUMN] = String(rows.length + 1);
-      rows.push(copy);
-    }
-  }
   return { columns, rows };
 }
 
@@ -87,9 +72,10 @@ export function mergeBatchSessions(sessions: AudioSession[]): MergedTableView | 
 
   if (processed.length === 1) {
     const only = processed[0];
+    const records = only.records;
     return {
-      records: only.records,
-      records_form: only.records_form,
+      records,
+      records_form: buildEvidenceFormTable(records),
       records_wide: only.records_wide,
       positions_count: only.positions_count || only.records.length,
       unknown_terms: only.unknown_terms,
@@ -100,12 +86,12 @@ export function mergeBatchSessions(sessions: AudioSession[]): MergedTableView | 
     };
   }
 
-  const formTables = processed.map((s) => s.records_form).filter(Boolean) as WideTable[];
   const wideTables = processed.map((s) => s.records_wide).filter(Boolean) as WideTable[];
+  const records = processed.flatMap((s) => s.records);
 
   return {
-    records: processed.flatMap((s) => s.records),
-    records_form: mergeFormTables(formTables),
+    records,
+    records_form: buildEvidenceFormTable(records),
     records_wide: mergeWideTables(wideTables),
     positions_count: processed.reduce((n, s) => n + (s.positions_count || s.records.length), 0),
     unknown_terms: mergeUnknownTerms(processed),

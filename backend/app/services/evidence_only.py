@@ -18,7 +18,11 @@ from app.services.locations import (
     is_peregon_haul,
 )
 from app.services.rail_side import extract_rail_side_note
-from app.services.sanitize_row_for_export import parsed_row_from_record, sanitize_row_for_export
+from app.services.sanitize_row_for_export import (
+    normalize_spaces,
+    parsed_row_from_record,
+    sanitize_row_for_export,
+)
 from app.services.speed_limit import strip_speed_limit_phrases
 
 TableExportMode = Literal["evidenceOnly", "normsEnriched"]
@@ -137,6 +141,15 @@ def _phrase_in_segment(phrase: str | None, segment: str) -> bool:
     return phrase.strip().lower() in segment.lower()
 
 
+def _note_evidence_in_segment(phrase: str | None, segment: str) -> bool:
+    if not phrase or not segment:
+        return False
+    if _phrase_in_segment(phrase, segment):
+        return True
+    core = re.sub(r"^(?:в|на)\s+", "", phrase.strip().lower()).strip()
+    return bool(core and core in segment.lower())
+
+
 def _is_norm_substituted_defect(defect: str | None, segment: str) -> bool:
     if not defect:
         return False
@@ -197,18 +210,25 @@ def defect_from_segment(rec: EvidenceRowSource) -> str:
 
 def note_from_segment(rec: EvidenceRowSource) -> str:
     """Примечание — sanitizeRowForExport + фразы из сегмента."""
+    segment = segment_text(rec)
     sanitized = _sanitized_row(rec)
     if sanitized.get("note"):
-        return str(sanitized["note"])
+        parts = [
+            normalize_spaces(p)
+            for p in re.split(r"[.;]+", str(sanitized["note"]))
+            if normalize_spaces(p)
+        ]
+        kept = [p for p in parts if _note_evidence_in_segment(p, segment)]
+        if kept:
+            return ". ".join(kept)
 
-    segment = segment_text(rec)
     if not segment:
         return ""
 
     notes: list[str] = []
     tip = _TIP_NOTE_RE.search(segment)
     if tip:
-        notes.append(tip.group(0).strip())
+        notes.append("в острие остряка")
     side = extract_rail_side_note(segment)
     if side:
         notes.append(side)
