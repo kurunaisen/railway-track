@@ -13,9 +13,12 @@ from app.schemas import (
     ExtractRailwayResponse,
     ExportRailwayRequest,
     RailwayRowOut,
+    TranscriptReviewRequest,
+    TranscriptReviewResponse,
 )
 from app.services.audit import log_action
 from app.services.inspection_repository import load_latest_done_job, save_railway_rows_metadata
+from app.services.llm.review_transcript import review_transcript_with_ai
 from app.services.railway.process_pipeline import export_rows_to_xlsx, rows_from_transcript
 from app.services.railway.types import RailwayRow
 from app.services.session_adapter import audio_file_to_session_out
@@ -29,6 +32,30 @@ def _rows_to_out(rows: list[RailwayRow]) -> list[RailwayRowOut]:
 
 def _rows_from_out(rows: list[RailwayRowOut]) -> list[RailwayRow]:
     return [RailwayRow.model_validate(row.model_dump(by_alias=True)) for row in rows]
+
+
+@router.post("/transcript-review", response_model=TranscriptReviewResponse)
+def review_transcript(
+    body: TranscriptReviewRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    try:
+        issues = review_transcript_with_ai(body.transcript)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    log_action(
+        db,
+        action="railway_transcript_review",
+        current=current,
+        request=request,
+        resource_type="railway",
+        resource_id=0,
+        details={"issues": len(issues)},
+    )
+    return TranscriptReviewResponse(issues=[issue.model_dump() for issue in issues])
 
 
 @router.post("/extract", response_model=ExtractRailwayResponse)

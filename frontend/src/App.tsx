@@ -11,6 +11,7 @@ import {
   getSession,
   isAdmin,
   processSession,
+  reviewTranscriptWithAi,
   saveSession,
   uploadAudio,
   type RailwayRow,
@@ -24,6 +25,7 @@ import {
   applyTranscriptSafeFixes,
   analyzeTranscriptQuality,
   buildTranscriptQualitySegments,
+  mergeTranscriptIssues,
   type TranscriptIssue,
   type TranscriptQualitySegment,
 } from "./railway/transcriptQuality";
@@ -106,10 +108,14 @@ function TranscriptQualityPreview({
   issues,
   segments,
   onApplySafeFixes,
+  onAiReview,
+  aiReviewLoading,
 }: {
   issues: TranscriptIssue[];
   segments: TranscriptQualitySegment[];
   onApplySafeFixes: () => void;
+  onAiReview: () => void;
+  aiReviewLoading: boolean;
 }) {
   if (segments.length === 1 && !segments[0].issue && !segments[0].text.trim()) return null;
 
@@ -139,6 +145,12 @@ function TranscriptQualityPreview({
           <span className="hint">Удаляются только очевидные лишние числа перед корректной шириной колеи.</span>
         </div>
       )}
+      <div className="transcript-quality-actions">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onAiReview} disabled={aiReviewLoading}>
+          {aiReviewLoading ? "AI проверяет…" : "Проверить текст AI"}
+        </button>
+        <span className="hint">Дополнительная проверка через backend, без автоправок.</span>
+      </div>
       <div className="transcript-quality-text" aria-label="Текст с подсветкой подозрительных фрагментов">
         {segments.map((segment, index) =>
           segment.issue ? (
@@ -196,6 +208,8 @@ export default function App() {
   const [recording, setRecording] = useState(false);
   const [saved, setSaved] = useState(false);
   const [transcriptDraft, setTranscriptDraft] = useState("");
+  const [aiTranscriptIssues, setAiTranscriptIssues] = useState<TranscriptIssue[]>([]);
+  const [aiReviewLoading, setAiReviewLoading] = useState(false);
   const [railwayRows, setRailwayRows] = useState<RailwayRow[]>([]);
   const [accountOpen, setAccountOpen] = useState(false);
   const [uploadBatch, setUploadBatch] = useState<AudioSession[]>([]);
@@ -250,6 +264,7 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
     if (session.full_transcript != null) {
+      setAiTranscriptIssues([]);
       setTranscriptDraft(session.full_transcript);
     }
     if (session.railway_rows?.length) {
@@ -308,6 +323,7 @@ export default function App() {
       setSession(processed);
       setUploadBatch((prev) => upsertBatchSession(prev, processed));
       if (processed.full_transcript) {
+        setAiTranscriptIssues([]);
         setTranscriptDraft(processed.full_transcript);
       }
       return processed;
@@ -437,6 +453,7 @@ export default function App() {
       const loaded = await getSession(sessionId);
       setSession(loaded);
       setUploadBatch((prev) => upsertBatchSession(prev, loaded));
+      setAiTranscriptIssues([]);
       setTranscriptDraft(loaded.full_transcript ?? "");
       setRailwayRows(loaded.railway_rows ?? []);
       setSaved(false);
@@ -461,7 +478,27 @@ export default function App() {
   };
 
   const handleApplyTranscriptSafeFixes = () => {
+    setAiTranscriptIssues([]);
     setTranscriptDraft((current) => applyTranscriptSafeFixes(current, analyzeTranscriptQuality(current)));
+  };
+
+  const handleTranscriptChange = (value: string) => {
+    setAiTranscriptIssues([]);
+    setTranscriptDraft(value);
+  };
+
+  const handleAiTranscriptReview = async () => {
+    if (!transcriptDraft.trim()) return;
+    setAiReviewLoading(true);
+    setError(null);
+    try {
+      const issues = await reviewTranscriptWithAi(transcriptDraft);
+      setAiTranscriptIssues(issues);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI-проверка текста недоступна");
+    } finally {
+      setAiReviewLoading(false);
+    }
   };
 
   if (authRequired === null) {
@@ -506,7 +543,11 @@ export default function App() {
   const displayRows = toDisplayRows(railwayRows);
   const warningCount = railwayRows.reduce((n, row) => n + (row.warnings?.length ?? 0), 0);
   const hasTranscript = Boolean(transcriptDraft.trim());
-  const transcriptQualityIssues = analyzeTranscriptQuality(transcriptDraft);
+  const localTranscriptQualityIssues = analyzeTranscriptQuality(transcriptDraft);
+  const transcriptQualityIssues = mergeTranscriptIssues(
+    localTranscriptQualityIssues,
+    aiTranscriptIssues,
+  );
   const transcriptQualitySegments = buildTranscriptQualitySegments(
     transcriptDraft,
     transcriptQualityIssues,
@@ -639,13 +680,15 @@ export default function App() {
               className="transcript-editor"
               rows={8}
               value={transcriptDraft}
-              onChange={(e) => setTranscriptDraft(e.target.value)}
+              onChange={(e) => handleTranscriptChange(e.target.value)}
               disabled={loading}
             />
             <TranscriptQualityPreview
               issues={transcriptQualityIssues}
               segments={transcriptQualitySegments}
               onApplySafeFixes={handleApplyTranscriptSafeFixes}
+              onAiReview={handleAiTranscriptReview}
+              aiReviewLoading={aiReviewLoading}
             />
             <div className="upload-actions" style={{ marginTop: 12 }}>
               <button

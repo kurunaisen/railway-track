@@ -175,6 +175,27 @@ export function analyzeTranscriptQuality(text: string): TranscriptIssue[] {
   return finalizeIssues(issues);
 }
 
+export function mergeTranscriptIssues(
+  localIssues: TranscriptIssue[],
+  aiIssues: TranscriptIssue[],
+): TranscriptIssue[] {
+  const issues = [...localIssues, ...aiIssues].filter((issue) => issue.end > issue.start);
+  const sorted = issues.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    if (a.severity !== b.severity) return a.severity === "error" ? -1 : 1;
+    return b.end - a.end;
+  });
+
+  const result: TranscriptIssue[] = [];
+  let cursor = -1;
+  for (const issue of sorted) {
+    if (issue.start < cursor) continue;
+    result.push(issue);
+    cursor = issue.end;
+  }
+  return result;
+}
+
 export function buildTranscriptQualitySegments(
   text: string,
   issues: TranscriptIssue[],

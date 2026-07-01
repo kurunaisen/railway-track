@@ -237,6 +237,22 @@ class ExportRailwayRequest(BaseModel):
     include_source_text: bool = False
 
 
+class TranscriptReviewRequest(BaseModel):
+    transcript: str = Field(min_length=1)
+
+
+class TranscriptReviewIssueOut(BaseModel):
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    severity: Literal["warning", "error"]
+    title: str
+    description: str
+
+
+class TranscriptReviewResponse(BaseModel):
+    issues: list[TranscriptReviewIssueOut] = Field(default_factory=list)
+
+
 class AudioSessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
