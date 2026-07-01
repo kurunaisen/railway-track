@@ -79,6 +79,7 @@ _LLM_SYSTEM_RULES_BASE = """Роль: текст → структура. НЕ ф
 - Ограничение скорости — НЕ defect. Это следствие неисправности: speed_limit=60, unit «км/ч», position_type «speed_limit»
 - «ограничение скорости 60», «скорость 60 км/ч», «скорость не более 40» → item speed_limit с value_numeric=число, без defect_text
 - Если в одной записи и дефект, и скорость — два items: defect + speed_limit (скорость не дублировать в defect_text)
+- После «на станции … N путь» все следующие items без нового перегона и без км/пикета — та же section_name и track_number (даже после «И уширение колеи…»)
 """
 
 
