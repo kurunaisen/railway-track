@@ -36,6 +36,11 @@ _REFERENCE_PATTERNS = [
         r"(?![\s,.;-]*(?:м|метр\w*|\d))",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"(?P<km>\d{2,5})\s*(?:км|километр\w*)"
+        r"(?![\s,.;-]*(?:пикет|пике|пк|м|метр\w*|\d))",
+        re.IGNORECASE,
+    ),
 ]
 _SWITCH_RE = re.compile(
     r"(?:стрелочн\w*\s+перевод(?:\s+номер)?|стр\.\s*п\.)\s*(?P<number>\d+[А-Яа-яA-Za-z-]*)",
@@ -92,8 +97,12 @@ def _extract_reference(text: str) -> str | None:
     for pattern in _REFERENCE_PATTERNS:
         match = pattern.search(text)
         if match:
-            reference = f"{match.group('km')} км, пк {match.group('pk')}"
-            meter = match.groupdict().get("m")
+            groups = match.groupdict()
+            reference = f"{groups['km']} км"
+            piket = groups.get("pk")
+            if piket:
+                reference = f"{reference}, пк {piket}"
+            meter = groups.get("m")
             if meter:
                 reference = f"{reference}, {meter} м"
             return reference

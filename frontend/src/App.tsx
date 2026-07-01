@@ -104,6 +104,13 @@ function AppFooter() {
   );
 }
 
+function combineSessionTranscripts(sessions: AudioSession[]): string {
+  return sessions
+    .map((item) => item.full_transcript?.trim())
+    .filter((text): text is string => Boolean(text))
+    .join("\n\n");
+}
+
 function TranscriptQualityPreview({
   issues,
   segments,
@@ -122,6 +129,8 @@ function TranscriptQualityPreview({
   const errorCount = issues.filter((issue) => issue.severity === "error").length;
   const warningCount = issues.length - errorCount;
   const safeFixCount = issues.filter((issue) => issue.safeFix).length;
+  const visibleIssues = issues.slice(0, 4);
+  const hiddenIssueCount = Math.max(0, issues.length - visibleIssues.length);
 
   return (
     <div className="transcript-quality" aria-live="polite">
@@ -167,16 +176,22 @@ function TranscriptQualityPreview({
         )}
       </div>
       {issues.length > 0 && (
-        <ul className="transcript-quality-list">
-          {issues.slice(0, 8).map((issue) => (
+        <details className="transcript-quality-details">
+          <summary>
+            Пояснения ({issues.length})
+            {hiddenIssueCount > 0 ? ` · показаны первые ${visibleIssues.length}` : ""}
+          </summary>
+          <ul className="transcript-quality-list">
+          {visibleIssues.map((issue) => (
             <li key={issue.id} className={`transcript-quality-item ${issue.severity}`}>
               <strong>{issue.title}</strong>
               <span>{issue.description}</span>
               {issue.safeFix && <em>Доступно безопасное исправление: {issue.safeFix.label}</em>}
             </li>
           ))}
-          {issues.length > 8 && <li className="hint">Ещё предупреждений: {issues.length - 8}</li>}
-        </ul>
+          {hiddenIssueCount > 0 && <li className="hint">Ещё предупреждений: {hiddenIssueCount}</li>}
+          </ul>
+        </details>
       )}
     </div>
   );
@@ -261,21 +276,13 @@ export default function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!session) return;
-    if (session.full_transcript != null) {
-      setAiTranscriptIssues([]);
-      setTranscriptDraft(session.full_transcript);
-    }
-    if (session.railway_rows?.length) {
-      setRailwayRows(session.railway_rows);
-    }
-  }, [session?.id, session?.full_transcript, session?.railway_rows]);
-
   const handleFiles = async (files: File[]) => {
     if (!editable || files.length === 0) return;
     setError(null);
     setSaved(false);
+    setAiTranscriptIssues([]);
+    setTranscriptDraft("");
+    setRailwayRows([]);
     setLoading(true);
     try {
       const uploaded: AudioSession[] = [];
@@ -299,7 +306,11 @@ export default function App() {
     }
   };
 
-  const runProcess = async (target: AudioSession, progress?: { index: number; total: number }) => {
+  const runProcess = async (
+    target: AudioSession,
+    progress?: { index: number; total: number },
+    syncTranscript = true,
+  ) => {
     setError(null);
     setSaved(false);
     setLoading(true);
@@ -322,7 +333,7 @@ export default function App() {
       }
       setSession(processed);
       setUploadBatch((prev) => upsertBatchSession(prev, processed));
-      if (processed.full_transcript) {
+      if (syncTranscript && processed.full_transcript) {
         setAiTranscriptIssues([]);
         setTranscriptDraft(processed.full_transcript);
       }
@@ -353,11 +364,14 @@ export default function App() {
       for (let i = 0; i < pending.length; i++) {
         const target = pending[i];
         setSession(target);
-        await runProcess(target, { index: i + 1, total: pending.length });
+        await runProcess(target, { index: i + 1, total: pending.length }, false);
       }
       const refreshed = await Promise.all(uploadBatch.map((s) => getSession(s.id)));
       setUploadBatch(refreshed);
       setSession(refreshed[refreshed.length - 1] ?? null);
+      setAiTranscriptIssues([]);
+      setTranscriptDraft(combineSessionTranscripts(refreshed));
+      setRailwayRows([]);
     } catch {
       // runProcess уже выставил error
     } finally {
@@ -462,6 +476,13 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectBatchSession = (item: AudioSession) => {
+    setSession(item);
+    setAiTranscriptIssues([]);
+    setTranscriptDraft(item.full_transcript ?? "");
+    setRailwayRows(item.railway_rows ?? []);
   };
 
   const handleExcelDownload = async () => {
@@ -649,7 +670,7 @@ export default function App() {
                     <button
                       type="button"
                       className={`upload-batch-item ${session?.id === item.id ? "active" : ""}`}
-                      onClick={() => setSession(item)}
+                      onClick={() => handleSelectBatchSession(item)}
                       disabled={loading}
                     >
                       <span className="upload-batch-name">{item.original_name}</span>

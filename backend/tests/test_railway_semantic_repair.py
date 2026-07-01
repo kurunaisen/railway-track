@@ -118,6 +118,42 @@ def test_repair_keeps_km_pk_reference_without_meter():
     assert row.reference == "249 км, пк 8"
 
 
+def test_repair_keeps_standalone_km_reference():
+    rows = repair_railway_rows(
+        [
+            _row(
+                location="Перегон Магнетиты - Шонгуй",
+                reference="249 км",
+                sourceText="Перегон Магнетиты - Шонгуй 249 км уширение рельсовой колеи 1543 мм",
+                defect="уширение рельсовой колеи 1543 мм",
+            )
+        ]
+    )
+
+    assert rows[0].reference == "249 км"
+
+
+def test_repair_rejects_piket_or_meter_without_km():
+    rows = repair_railway_rows(
+        [
+            _row(
+                reference="пикет 8",
+                sourceText="пикет 8 уширение рельсовой колеи 1543 мм",
+                defect="уширение рельсовой колеи 1543 мм",
+            ),
+            _row(
+                reference="87 метр",
+                sourceText="87 метр отсутствует 1 стыковой болт",
+                defect="отсутствует 1 стыковой болт",
+            ),
+        ]
+    )
+
+    assert rows[0].reference is None
+    assert rows[1].reference is None
+    assert all("reference cleared" in " ".join(row.warnings) for row in rows)
+
+
 def test_repair_cleans_excel_observed_location_and_reference_leaks():
     rows = repair_railway_rows(
         [

@@ -718,6 +718,35 @@ body {
   list-style: none;
 }
 
+.transcript-quality-details {
+  border-top: 1px solid rgba(192, 196, 204, 0.1);
+}
+
+.transcript-quality-details summary {
+  cursor: pointer;
+  padding: 0.7rem 0.9rem;
+  color: var(--silver);
+  font-size: 0.82rem;
+  font-weight: 600;
+  list-style: none;
+}
+
+.transcript-quality-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.transcript-quality-details summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.45rem;
+  color: var(--gold-light);
+  transition: transform 0.2s;
+}
+
+.transcript-quality-details[open] summary::before {
+  transform: rotate(90deg);
+}
+
 .transcript-quality-item {
   display: grid;
   gap: 0.15rem;
