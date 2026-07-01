@@ -11,7 +11,7 @@ from app.services.switch_terminology import (
 )
 
 RAILWAY_INITIAL_PROMPT = (
-    "Обход пути. Перегон, станция, блокпост, остановочный пункт, участок, путь, главный, километр, пикет, "
+    "Обход пути. Перегон, станция, блокпост, остановочный пункт, участок, путь, главный, километр, пикет, метр, "
     "рельс, рельсовой, шпала, стык, стрелочный перевод, остряк, крестовина, сердечник, усовик, "
     "хвост крестовины, рамный рельс, контррельс, колея, ширина колеи, уровень, износ, просадка, "
     "трещина, уширение, сужение, отслоение, выбоина, балласт, уклон, кривая, неисправность, дефект, "
@@ -60,6 +60,16 @@ PARAMETER_KEYWORDS = [
     "перекос",
     "рихтовка",
     "выправка",
+    "привязка",
+    "метр",
+]
+
+# Привязка (км, пикет, метр)
+BINDING_KEYWORDS = [
+    "привязка",
+    "метр",
+    "километр",
+    "пикет",
 ]
 
 # Неисправности / дефекты
@@ -128,6 +138,8 @@ KNOWN_TERMS_BASE: set[str] = {
     "болт",
     "звено",
     "миллиметр",
+    "метр",
+    "м",
     "мм",
     "сантиметр",
     "промилле",
@@ -220,6 +232,10 @@ DOMAIN_INFLECTIONS: set[str] = {
     "пути",
     "путей",
     "пикета",
+    "метра",
+    "метре",
+    "метров",
+    "метрам",
     "километра",
     "участка",
     "перегона",
@@ -250,7 +266,13 @@ def _build_known_terms() -> set[str]:
     terms.update(DOMAIN_INFLECTIONS)
     terms.update(_location_tokens())
     terms.update(switch_terms_for_dictionary())
-    for phrase in (*OBJECT_KEYWORDS, *PARAMETER_KEYWORDS, *DEFECT_KEYWORDS, *SWITCH_ELEMENT_TERMS):
+    for phrase in (
+        *OBJECT_KEYWORDS,
+        *PARAMETER_KEYWORDS,
+        *DEFECT_KEYWORDS,
+        *BINDING_KEYWORDS,
+        *SWITCH_ELEMENT_TERMS,
+    ):
         terms.add(_normalize_token(phrase))
         terms.update(_tokens_from_phrase(phrase))
     return terms

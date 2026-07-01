@@ -38,6 +38,14 @@ def test_switch_glossary_terms_known():
         assert is_known_domain_word(word), word
 
 
+def test_binding_meter_not_unknown():
+    text = "1418 километр пикет 4 метр 22 отсутствует стыковой болт"
+    terms = {t["term"] for t in detect_unknown_terms(text)}
+    for word in ("метр", "метра", "метре", "метров"):
+        assert is_known_domain_word(word)
+    assert "метр" not in terms
+
+
 def test_is_known_domain_word_stems():
     assert is_known_domain_word("колеи")
     assert is_known_domain_word("скорости")
