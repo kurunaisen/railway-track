@@ -22,7 +22,9 @@ from app.services.locations import is_peregon_haul
 from app.services.stations import normalize_station_name, CANONICAL_STATIONS
 from app.services.station_km import sanitize_station_km
 from app.services.station_context import propagate_station_context
+from app.services.asr_fixes import fix_asr_transcript
 from app.services.switch_context import propagate_switch_context
+from app.services.switch_measurement import apply_switch_measurement_context
 from app.services.track_norms import apply_track_norms_all
 from app.services.canonical_model import _location_only_fragment
 
@@ -301,6 +303,8 @@ def normalize_all(
     records: list[ParsedRecord],
     source_text: str | None = None,
 ) -> list[ParsedRecord]:
+    if source_text:
+        source_text = fix_asr_transcript(source_text)
     for record in records:
         _resolve_peregon_asr_alias(record)
     records = reconcile_speed_limit_rows(records)
@@ -312,6 +316,7 @@ def normalize_all(
     records = propagate_station_context(records)
     if source_text:
         records = propagate_switch_context(records, source_text)
+    records = apply_switch_measurement_context(records)
     records = [normalize_record(r) for r in records]
     records = apply_track_norms_all(records)
     return drop_orphan_speed_rows(records)

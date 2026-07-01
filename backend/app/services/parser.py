@@ -184,6 +184,16 @@ def _extract_put(text: str) -> str | None:
     return None
 
 
+PATH_BINDING_MARK_RE = re.compile(
+    r"(?:^|\s)(?:\d+\s+путь\b|путь\s*(?:№|номер|n\.?)?\s*\d+\b)",
+    re.IGNORECASE,
+)
+
+
+def has_path_binding(text: str) -> bool:
+    return bool(PATH_BINDING_MARK_RE.search(text))
+
+
 _SWITCH_EXPLICIT_RE = re.compile(
     r"стрелочн(?:ый|ого|ом|ая)?\s+перевод(?:а|е|у|ом)?\s*(?:№|номер|n\.?)?\s*(\d+)",
     re.IGNORECASE,
@@ -316,6 +326,11 @@ def _find_all_mentions(text: str, keywords: list[str]) -> list[tuple[str, int]]:
 COMPOUND_DEFECT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"уширение\s+(?:рельсовой\s+)?колеи", re.IGNORECASE),
     re.compile(r"сужение\s+(?:рельсовой\s+)?колеи", re.IGNORECASE),
+    re.compile(r"износ\s+рамн(?:ого|ом|ые)?\s+рельс(?:а|ов|е|ом)?", re.IGNORECASE),
+    re.compile(
+        r"куст(?:\w*\s+)?(?:из\s+)?\d+(?:\s+подряд)?\s*(?:негодн\w*\s+)?шпал\w*",
+        re.IGNORECASE,
+    ),
 )
 
 # «неисправность» / «дефект» — вводные слова, не самостоятельная позиция.

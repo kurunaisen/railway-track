@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.config import settings
+from app.services.asr_fixes import fix_asr_transcript
 from app.services.canonical_model import enforce_single_position_per_row
 from app.services.llm import parse_with_primary_llm
 from app.services.llm.claude_reviewer import review_all_disputed
@@ -30,6 +31,7 @@ def run_parsing_pipeline(
     logical_blocks: list[LogicalBlock] | None = None,
 ) -> ParseResult:
     errors: list[dict] = []
+    full_text = fix_asr_transcript(full_text)
 
     blocks = logical_blocks or segment_logical_blocks(full_text, segments)
     n_blocks = len(blocks)

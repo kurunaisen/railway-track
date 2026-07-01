@@ -35,7 +35,10 @@ from app.services.parser import (
     _find_all_mentions,
     _normalize_text,
     _split_multi_defects,
+    has_path_binding,
+    PATH_BINDING_MARK_RE,
 )
+from app.services.switch_measurement import path_block_keeps_switch_context
 from app.services.rail_side import (
     extract_rail_side_note,
     is_rail_side_only_fragment,
@@ -102,7 +105,11 @@ _BINDING_PIKET_RE = re.compile(
     r"(?:^|\s)(?:на\s+)?пикет\s*\d+",
     re.IGNORECASE,
 )
-_PATH_BINDING_RE = re.compile(r"(?:^|\s)(\d+\s+путь\b)", re.IGNORECASE)
+_PATH_BINDING_RE = PATH_BINDING_MARK_RE
+_REVERSE_PATH_BINDING_RE = re.compile(
+    r"путь\s*(?:№|номер|n\.?)?\s*\d+\b",
+    re.IGNORECASE,
+)
 _STATION_BLOCK_RE = re.compile(r"(?:^|\b)(?:на\s+)?станци[яи]\s+", re.IGNORECASE)
 
 
@@ -201,8 +208,12 @@ def _binding_split_points(normalized: str) -> list[int]:
         if match.start() > 0:
             points.append(match.start())
 
-    for i, match in enumerate(_PATH_BINDING_RE.finditer(normalized)):
+    matches = list(_PATH_BINDING_RE.finditer(normalized))
+    for i, match in enumerate(matches):
         if i > 0:
+            points.append(match.start())
+        elif _REVERSE_PATH_BINDING_RE.search(match.group(0)):
+            # «путь 12» после стр.п. — новый блок; «5 путь» в начале блока — нет.
             points.append(match.start())
 
     return sorted(set(points))
@@ -221,10 +232,17 @@ def _inherit_location_fields(
         if station:
             ctx.uchastok = station
         location = ()
-    elif re.search(r"\d+\s+путь\b", _normalize_text(loc_text)):
+    elif has_path_binding(_normalize_text(loc_text)):
         normalized = _normalize_text(loc_text)
         ctx.put = _extract_put(normalized)
         ctx.switch = _extract_switch(normalized)
+        if (
+            not ctx.switch
+            and inherited.station_active
+            and inherited.switch
+            and path_block_keeps_switch_context(normalized)
+        ):
+            ctx.switch = inherited.switch
         if inherited.station_active:
             ctx.peregon = None
             ctx.km = None

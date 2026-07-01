@@ -2,28 +2,23 @@
 
 from __future__ import annotations
 
-import re
+from app.services.asr_fixes import fix_asr_transcript
+from app.services.canonical_model import _split_by_location
+from app.services.switch_measurement import path_block_keeps_switch_context
+from app.services.parser import (
+    ParsedRecord,
+    _extract_put,
+    _extract_switch,
+    _normalize_text,
+    has_path_binding,
+)
 
-from app.services.parser import ParsedRecord, _extract_put, _extract_switch, _normalize_text
 
-_PATH_MARK_RE = re.compile(r"(?:^|\s)(\d+\s+путь\b)", re.IGNORECASE)
-
-
-def _path_context_segments(source_text: str) -> list[tuple[str | None, str | None]]:
-    """Фрагменты «…N путь … стрелочный перевод M» — по одному на каждый путь."""
-    normalized = _normalize_text(source_text)
-    matches = list(_PATH_MARK_RE.finditer(normalized))
-    if not matches:
-        return [(_extract_put(normalized), _extract_switch(normalized))]
-
-    split_starts = [0] + [m.start() for m in matches[1:]]
-    segments: list[tuple[str | None, str | None]] = []
-    for i, start in enumerate(split_starts):
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(normalized)
-        part = normalized[start:end].strip(" ,.;")
-        if part:
-            segments.append((_extract_put(part), _extract_switch(part)))
-    return segments or [(_extract_put(normalized), _extract_switch(normalized))]
+def _segment_put_switch(part: str) -> tuple[str | None, str | None]:
+    """Путь — только если в фрагменте явно «N путь»; стр.п. — из любого упоминания."""
+    normalized = _normalize_text(part)
+    put = _extract_put(normalized) if has_path_binding(normalized) else None
+    return put, _extract_switch(normalized)
 
 
 def propagate_switch_context(
@@ -32,14 +27,16 @@ def propagate_switch_context(
 ) -> list[ParsedRecord]:
     """
     Заполняет put/switch из полного ASR-текста по порядку логических записей.
-    «…5 путь стрелочный перевод 15 … 6 путь стрелочный перевод 18 …»
+    Сегменты совпадают с _split_by_location: блок «стр.п. 10» без «N путь» не получает put.
     """
     if not source_text or not records:
         return records
 
-    segments = _path_context_segments(source_text)
+    source_text = fix_asr_transcript(source_text)
+    parts = _split_by_location(source_text)
+    segments = [_segment_put_switch(part) for part in parts]
     if not segments:
-        return records
+        segments = [_segment_put_switch(source_text)]
 
     indices = sorted(
         {r.logical_record_index for r in records if r.logical_record_index is not None}
@@ -49,8 +46,13 @@ def propagate_switch_context(
 
     for i, idx in enumerate(indices):
         seg_put, seg_switch = segments[min(i, len(segments) - 1)]
-        if seg_put:
+        part = parts[min(i, len(parts) - 1)]
+        if seg_put is not None:
             active_put = seg_put
+            if not seg_switch and not path_block_keeps_switch_context(part):
+                active_switch = None
+        elif seg_switch:
+            active_put = None
         if seg_switch:
             active_switch = seg_switch
 
