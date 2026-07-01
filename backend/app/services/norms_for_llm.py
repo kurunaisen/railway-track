@@ -19,9 +19,9 @@ from app.services.instruction_refs import (
 from app.services.track_norms import JOINT_GAP_RULE, TrackNormRule
 
 _NORM_PRINCIPLES = (
-    "Превышение допустимой нормы = неисправность (defect), не parameter.",
-    "V огр. — следствие неисправности по таблицам инструкции, если инспектор не назвал скорость устно.",
-    "Ограничение скорости — отдельный item с position_type speed_limit, не дублировать в defect_text.",
+    "Превышение допустимой нормы → defect_text (например «уширение рельсовой колеи»), не parameter.",
+    "V огр. в JSON не заполняй — его рассчитывает бэкенд по нормам. Исключение: инспектор явно назвал скорость в тексте.",
+    "Явная скорость в тексте («ограничение скорости 60», «скорость не более 40») → отдельный item с position_type speed_limit.",
     "Числа вроде «1400» рядом с шириной колеи — шум ASR, не km_value; ширина 1512–1548 мм.",
 )
 
@@ -146,7 +146,7 @@ def build_norms_summary_for_llm() -> str:
     ]
     for ex in ref["examples"]:
         lines.append(
-            f"Пример: {ex['measurement_mm']} мм ({ex['context']}) → "
-            f"{ex['defect']}, V огр. {ex['speed_limit_kmh']} км/ч ({ex['ref']})."
+            f"Пример классификации: {ex['measurement_mm']} мм ({ex['context']}) → "
+            f"defect «{ex['defect']}» ({ex['ref']}). V огр. в JSON не указывай."
         )
     return "\n".join(lines)

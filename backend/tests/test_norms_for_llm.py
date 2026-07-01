@@ -21,6 +21,7 @@ def test_summary_1543_example_matches_code():
     speed = gauge_speed_limit_kmh(evaluation)
     assert "1543" in summary
     assert str(speed) in summary
+    assert "не указывай" in summary.lower()
 
 
 def test_reference_bands_match_track_norms():
@@ -40,3 +41,6 @@ def test_llm_system_rules_include_generated_norms():
     rules = build_llm_system_rules()
     assert "автогенерация из gauge_norms" in rules
     assert "1543" in rules
+    assert "модуль структурирования дефектов" in rules
+    assert "Не придумывай ограничения скорости" in rules
+    assert "switch_number=null" in rules
