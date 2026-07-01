@@ -701,6 +701,14 @@ body {
   padding: 0.08rem 0.14rem;
   border-radius: 0.25rem;
   color: inherit;
+  cursor: pointer;
+  transition: filter 0.15s, box-shadow 0.15s;
+}
+
+.transcript-mark:hover,
+.transcript-mark:focus-visible {
+  filter: brightness(1.2);
+  outline: none;
 }
 
 .transcript-mark-warning {
@@ -755,6 +763,15 @@ body {
   padding: 0.55rem 0.65rem;
   border-radius: 0.55rem;
   font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.transcript-quality-item:hover,
+.transcript-quality-item:focus-visible {
+  outline: none;
+  border-color: rgba(212, 175, 55, 0.45);
+  background: rgba(212, 175, 55, 0.1);
 }
 
 .transcript-quality-item strong {

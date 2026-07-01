@@ -110,10 +110,12 @@ function TranscriptQualityPreview({
   issues,
   segments,
   onApplySafeFixes,
+  onSelectIssue,
 }: {
   issues: TranscriptIssue[];
   segments: TranscriptQualitySegment[];
   onApplySafeFixes: () => void;
+  onSelectIssue: (issue: TranscriptIssue) => void;
 }) {
   if (segments.length === 1 && !segments[0].issue && !segments[0].text.trim()) return null;
 
@@ -152,6 +154,15 @@ function TranscriptQualityPreview({
               key={`${segment.issue.id}-${index}`}
               className={`transcript-mark transcript-mark-${segment.issue.severity}`}
               title={`${segment.issue.title}: ${segment.issue.description}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectIssue(segment.issue!)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectIssue(segment.issue!);
+                }
+              }}
             >
               {segment.text}
             </mark>
@@ -168,7 +179,19 @@ function TranscriptQualityPreview({
           </summary>
           <ul className="transcript-quality-list">
           {visibleIssues.map((issue) => (
-            <li key={issue.id} className={`transcript-quality-item ${issue.severity}`}>
+            <li
+              key={issue.id}
+              className={`transcript-quality-item ${issue.severity}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectIssue(issue)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectIssue(issue);
+                }
+              }}
+            >
               <strong>{issue.title}</strong>
               <span>{issue.description}</span>
               {issue.safeFix && <em>Доступно безопасное исправление: {issue.safeFix.label}</em>}
@@ -212,6 +235,7 @@ export default function App() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [uploadBatch, setUploadBatch] = useState<AudioSession[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const transcriptEditorRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -479,6 +503,17 @@ export default function App() {
     setTranscriptDraft((current) => applyTranscriptSafeFixes(current, analyzeTranscriptQuality(current)));
   };
 
+  const handleSelectTranscriptIssue = (issue: TranscriptIssue) => {
+    const editor = transcriptEditorRef.current;
+    if (!editor) return;
+    editor.focus();
+    editor.setSelectionRange(issue.start, issue.end);
+    const textBefore = editor.value.slice(0, issue.start);
+    const lineIndex = textBefore.split("\n").length - 1;
+    const lineHeight = Number.parseFloat(window.getComputedStyle(editor).lineHeight) || 24;
+    editor.scrollTop = Math.max(0, lineIndex * lineHeight - editor.clientHeight / 2);
+  };
+
   const handleTranscriptChange = (value: string) => {
     setTranscriptDraft(value);
   };
@@ -654,6 +689,7 @@ export default function App() {
               <p className="hint">Средняя уверенность ASR: {(session.asr_avg_confidence * 100).toFixed(0)}%</p>
             )}
             <textarea
+              ref={transcriptEditorRef}
               className="transcript-editor"
               rows={8}
               value={transcriptDraft}
@@ -664,6 +700,7 @@ export default function App() {
               issues={transcriptQualityIssues}
               segments={transcriptQualitySegments}
               onApplySafeFixes={handleApplyTranscriptSafeFixes}
+              onSelectIssue={handleSelectTranscriptIssue}
             />
             <div className="upload-actions" style={{ marginTop: 12 }}>
               <button
