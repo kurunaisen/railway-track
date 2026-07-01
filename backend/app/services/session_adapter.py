@@ -16,6 +16,7 @@ from app.schemas import (
     LogicalRecordOut,
     SessionSummaryOut,
     StructuredRecordsOut,
+    RailwayRowOut,
     TrackRecordOut,
     TranscriptSegmentOut,
     WideTableOut,
@@ -209,6 +210,15 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
         except ValidationError as exc:
             logger.warning("Skip invalid structured records for job %s: %s", done.id, exc)
 
+    railway_rows: list[RailwayRowOut] = []
+    if done:
+        meta = done.get_pipeline_metadata() or {}
+        for raw in meta.get("railway_rows", []):
+            try:
+                railway_rows.append(RailwayRowOut.model_validate(raw))
+            except ValidationError as exc:
+                logger.warning("Skip invalid railway row in job %s: %s", done.id, exc)
+
     return AudioSessionOut(
         id=audio.id,
         filename=audio.stored_path,
@@ -235,6 +245,7 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
         logical_records_count=len(_build_logical_records(rows)),
         positions_count=len(rows),
         structured_records=structured,
+        railway_rows=railway_rows,
     )
 
 

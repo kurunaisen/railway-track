@@ -97,7 +97,6 @@ def test_structured_by_segments_calls_llm_per_block(monkeypatch):
         "app.services.llm.segment_llm_parser._parse_segment_openai",
         fake_parse,
     )
-    monkeypatch.setattr("app.services.llm.segment_llm_parser.settings.llm_primary_parser", "openai")
 
     structured = parse_structured_by_segments(MURMANSK)
     assert len(structured["rows"]) == len(blocks) == 4

@@ -8,7 +8,7 @@ Role = Literal["admin", "operator", "viewer"]
 StorageBackend = Literal["local", "s3", "supabase"]
 AsrProvider = Literal["faster-whisper", "yandex"]
 ParserMode = Literal["regex", "openai", "hybrid", "narrative"]
-LlmPrimaryParser = Literal["openai", "anthropic"]
+LlmProviderName = Literal["openai"]
 TableExportMode = Literal["evidenceOnly", "normsEnriched"]
 
 
@@ -43,14 +43,11 @@ class Settings(BaseSettings):
     # JSON авторизованного ключа SA (рекомендуется вместо API-key для SpeechKit)
     yandex_sa_authorized_key: str = ""
 
-    # ── LLM (FR 15.2–15.3): текст → строгий JSON, не Excel ──
-    parser_mode: ParserMode = "hybrid"
-    llm_primary_parser: LlmPrimaryParser = "openai"  # openai=ChatGPT | anthropic=Claude (A/B)
+    # ── LLM: OpenAI (ChatGPT) ──
+    llm_provider: LlmProviderName = "openai"
     openai_api_key: str = ""
     openai_model: str = "gpt-4.1-mini"
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-3-5-haiku-20241022"
-    llm_review_disputed: bool = True  # Claude ревью при openai primary (и наоборот в A/B)
+    parser_mode: ParserMode = "hybrid"  # legacy only (v1 pipeline in app/legacy)
 
     # ── Security ──
     secret_key: str = Field(default="CHANGE-ME-in-production-use-openssl-rand-hex-32")
@@ -98,7 +95,6 @@ class Settings(BaseSettings):
         "yandex_speech_api_key",
         "yandex_speech_folder_id",
         "openai_api_key",
-        "anthropic_api_key",
         mode="before",
     )
     @classmethod
@@ -122,6 +118,11 @@ class Settings(BaseSettings):
     # ── Preprocessing ──
     split_on_silence: bool = True
     silence_split_min_duration: float = 120.0
+
+    @property
+    def llm_primary_parser(self) -> str:
+        """Legacy alias для v1-модулей."""
+        return self.llm_provider
 
     @property
     def broker_url(self) -> str:

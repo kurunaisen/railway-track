@@ -109,6 +109,10 @@ app.include_router(auth.router)
 
 app.include_router(api.router)
 
+from app.routers import railway as railway_router
+
+app.include_router(railway_router.router, prefix="/api")
+
 app.include_router(admin.router)
 
 
@@ -151,8 +155,6 @@ def health():
 
             "openai": bool(settings.openai_api_key),
 
-            "anthropic": bool(settings.anthropic_api_key),
-
         },
 
         "env_present": {
@@ -167,7 +169,7 @@ def health():
 
             "OPENAI_API_KEY": _env_present("OPENAI_API_KEY"),
 
-            "ANTHROPIC_API_KEY": _env_present("ANTHROPIC_API_KEY"),
+            "OPENAI_API_KEY": _env_present("OPENAI_API_KEY"),
 
             "DATABASE_URL": _env_present("DATABASE_URL"),
 
@@ -189,22 +191,25 @@ def health():
 
             "storage": settings.storage_backend,
 
-            "asr": settings.asr_provider,
+            "asr": "yandex",
+
+        "railway_pipeline": {
+            "version": "v2",
+            "asr": "yandex",
+            "llm_provider": settings.llm_provider,
+            "steps": ["upload", "transcribe", "edit_transcript", "extract", "preview", "export"],
+        },
 
         "neural": {
             "asr": {
                 "role": "audio_to_text",
-                "provider": settings.asr_provider,
+                "provider": "yandex",
                 "timestamps": True,
-                "recommended": "faster-whisper (local) or yandex (Russian cloud)",
             },
             "llm": {
-                "role": "text_to_structure",
-                "output": "strict JSON (records/items), not Excel",
-                "primary_parser": settings.llm_primary_parser,
-                "parser_mode": settings.parser_mode,
-                "review_disputed": settings.llm_review_disputed,
-                "review_provider": "anthropic" if settings.llm_primary_parser == "openai" else "openai",
+                "role": "transcript_to_railway_rows",
+                "output": "strict JSON RailwayRow[]",
+                "provider": settings.llm_provider,
             },
         },
 

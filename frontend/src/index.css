@@ -632,6 +632,26 @@ body {
   border-left: 3px solid rgba(212, 175, 55, 0.45);
 }
 
+.transcript-editor {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  line-height: 1.75;
+  border: 1px solid var(--carbon-border);
+  color: var(--silver);
+  min-height: 180px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.transcript-editor:focus {
+  outline: none;
+  border-color: rgba(212, 175, 55, 0.55);
+}
+
 /* ── Table ── */
 .table-header {
   display: flex;

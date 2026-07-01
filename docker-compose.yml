@@ -55,7 +55,6 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - YANDEX_SPEECH_API_KEY=${YANDEX_SPEECH_API_KEY:-}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
       - CORS_ORIGINS=["https://localhost","http://localhost"]
@@ -89,7 +88,6 @@ services:
       - ENCRYPT_TRANSCRIPTS=true
       - DATA_ENCRYPTION_KEY=${DATA_ENCRYPTION_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       - uploads:/app/uploads
     depends_on:

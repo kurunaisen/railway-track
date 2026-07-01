@@ -1,5 +1,10 @@
 import { authHeaders } from "./auth";
 import { apiBase } from "./config";
+import type { RailwayRow } from "./railway/types";
+import { parseRailwayRowsPayload } from "./railway/schema";
+import { normalizeRailwayRows } from "./railway/normalizeRailwayRows";
+
+export type { RailwayRow };
 
 export interface TrackRecord {
   id: number;
@@ -95,6 +100,7 @@ export interface AudioSession {
   records_count: number;
   logical_records_count: number;
   positions_count: number;
+  railway_rows: RailwayRow[];
 }
 
 const API = apiBase();
@@ -126,6 +132,7 @@ export function normalizeSession(raw: Partial<AudioSession> & Pick<AudioSession,
     records_count: raw.records_count ?? raw.records?.length ?? 0,
     logical_records_count: raw.logical_records_count ?? raw.logical_records?.length ?? 0,
     positions_count: raw.positions_count ?? raw.records?.length ?? 0,
+    railway_rows: raw.railway_rows ?? [],
   };
 }
 
@@ -171,6 +178,46 @@ export async function uploadAudioFiles(files: File[]): Promise<AudioSession[]> {
     sessions.push(await uploadAudio(file));
   }
   return sessions;
+}
+
+export async function extractRailwayRows(
+  transcript: string,
+  sessionId?: number
+): Promise<RailwayRow[]> {
+  const url = sessionId
+    ? `${API}/railway/sessions/${sessionId}/extract`
+    : `${API}/railway/extract`;
+  const res = await apiFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transcript }),
+  });
+  const data = await res.json();
+  const rows = parseRailwayRowsPayload(data);
+  return normalizeRailwayRows(rows);
+}
+
+export async function exportRailwayRowsXlsx(
+  rows: RailwayRow[],
+  options?: { includeSourceText?: boolean; fileName?: string }
+): Promise<void> {
+  const res = await apiFetch(`${API}/railway/export`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      rows,
+      include_source_text: options?.includeSourceText ?? false,
+    }),
+  });
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = options?.fileName ?? "railway_table.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export async function processSession(
@@ -324,8 +371,10 @@ export const FIELD_LABELS: Record<EditableField, string> = {
 };
 
 export const PIPELINE_STEPS = [
-  "Загрузка", "Предобработка", "ASR", "Сегментация", "LLM-разбор",
-  "Нормализация", "Валидация", "Сохранение", "Отображение", "Excel",
+  "Загрузка",
+  "Предобработка",
+  "Yandex SpeechKit",
+  "Transcript готов",
 ];
 
 export function canEdit(role: string): boolean {

@@ -73,34 +73,8 @@ def _parse_segment_openai(block: SegmentedBlock, index: int) -> dict:
     return parse_llm_row_json(response.choices[0].message.content or "{}")
 
 
-def _parse_segment_claude(block: SegmentedBlock, index: int) -> dict:
-    from anthropic import Anthropic
-
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY не задан")
-
-    client = Anthropic(api_key=settings.anthropic_api_key)
-    message = client.messages.create(
-        model=settings.anthropic_model,
-        max_tokens=1024,
-        system=build_llm_segment_system_rules(),
-        messages=[
-            {
-                "role": "user",
-                "content": json.dumps(_build_segment_payload(block, index), ensure_ascii=False),
-            }
-        ],
-    )
-    return parse_llm_row_json(message.content[0].text if message.content else "{}")
-
-
 def extract_rows_from_segment_llm(block: SegmentedBlock, index: int = 0) -> list[ParsedRow]:
-    parse_one = (
-        _parse_segment_claude
-        if settings.llm_primary_parser == "anthropic"
-        else _parse_segment_openai
-    )
-    row = parse_one(block, index)
+    row = _parse_segment_openai(block, index)
     row = merge_segment_row(row, block)
     return validate_rows_for_segment(block.segment, [row])
 
@@ -123,8 +97,7 @@ def parse_structured_by_segments(
             raise
 
     logger.info(
-        "LLM (%s) by segments: %d calls → %d rows",
-        settings.llm_primary_parser,
+        "LLM (openai) by segments: %d calls → %d rows",
         len(blocks),
         len(rows),
     )

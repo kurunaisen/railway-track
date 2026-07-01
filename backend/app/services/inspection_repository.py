@@ -122,6 +122,52 @@ def clear_job_results(db: Session, job_id: int) -> None:
     db.flush()
 
 
+def save_transcript_only(
+    db: Session,
+    job: ProcessingJob,
+    full_text: str,
+    asr_segments: list[AsrSegment],
+    avg_confidence: float | None,
+    file_metadata: dict,
+) -> None:
+    """Сохраняет только ASR-транскript (новый pipeline, без LLM/records)."""
+    clear_job_results(db, job.id)
+
+    transcript = Transcript(
+        job_id=job.id,
+        full_text=full_text,
+        language="ru",
+        confidence_avg=avg_confidence,
+    )
+    db.add(transcript)
+    db.flush()
+
+    for idx, seg in enumerate(asr_segments):
+        db.add(
+            TranscriptSegment(
+                transcript_id=transcript.id,
+                segment_index=idx,
+                start_sec=seg.start,
+                end_sec=seg.end,
+                text=seg.text,
+                confidence=seg.confidence,
+            )
+        )
+
+    job.set_pipeline_metadata({
+        "file_metadata": file_metadata,
+        "railway_rows": [],
+        "parse_errors": [],
+    })
+
+
+def save_railway_rows_metadata(db: Session, job: ProcessingJob, rows: list[dict]) -> None:
+    meta = job.get_pipeline_metadata() or {}
+    meta["railway_rows"] = rows
+    job.set_pipeline_metadata(meta)
+    db.commit()
+
+
 def save_job_results(
     db: Session,
     job: ProcessingJob,

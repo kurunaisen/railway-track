@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -209,6 +210,33 @@ class StructuredRecordsOut(BaseModel):
     records: list[InspectionRecordStructured] = Field(default_factory=list)
 
 
+class RailwayRowOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    location: str | None = None
+    assetKind: Literal["track", "switch"] | None = None
+    assetNumber: str | None = None
+    reference: str | None = None
+    defect: str | None = None
+    speedLimit: int | None = None
+    note: str | None = None
+    sourceText: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ExtractRailwayRequest(BaseModel):
+    transcript: str = Field(min_length=1)
+
+
+class ExtractRailwayResponse(BaseModel):
+    rows: list[RailwayRowOut] = Field(default_factory=list)
+
+
+class ExportRailwayRequest(BaseModel):
+    rows: list[RailwayRowOut] = Field(default_factory=list)
+    include_source_text: bool = False
+
+
 class AudioSessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -237,6 +265,7 @@ class AudioSessionOut(BaseModel):
     logical_records_count: int = 0
     positions_count: int = 0
     structured_records: StructuredRecordsOut | None = None
+    railway_rows: list[RailwayRowOut] = Field(default_factory=list)
 
 
 class ProcessResponse(BaseModel):

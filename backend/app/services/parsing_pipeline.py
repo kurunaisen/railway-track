@@ -8,7 +8,6 @@ from app.config import settings
 from app.services.asr_fixes import fix_asr_transcript
 from app.services.canonical_model import enforce_single_position_per_row
 from app.services.llm import parse_with_primary_llm
-from app.services.llm.claude_reviewer import review_all_disputed
 from app.services.llm.json_schema import count_structured_records
 from app.services.parser import ParseResult, TranscriptSegment, detect_unknown_terms
 from app.services.parse_railway_narrative import (
@@ -25,8 +24,6 @@ logger = logging.getLogger(__name__)
 def _llm_available() -> bool:
     if settings.parser_mode not in ("openai", "hybrid"):
         return False
-    if settings.llm_primary_parser == "anthropic":
-        return bool(settings.anthropic_api_key)
     return bool(settings.openai_api_key)
 
 
@@ -68,8 +65,7 @@ def run_parsing_pipeline(
             if llm_ok:
                 records = llm_rows
                 logger.info(
-                    "LLM (%s): %d records, %d items from %d blocks",
-                    settings.llm_primary_parser,
+                    "LLM (openai): %d records, %d items from %d blocks",
                     n_llm_logical,
                     n_llm_pos,
                     n_blocks,
@@ -78,7 +74,7 @@ def run_parsing_pipeline(
                 errors.append({
                     "row": -1,
                     "error": (
-                        f"LLM ({settings.llm_primary_parser}): {n_llm_logical} rows "
+                        f"LLM (openai): {n_llm_logical} rows "
                         f"при {n_asr_segments} ASR-сегментах — fallback на regex"
                     ),
                     "severity": "warning",
@@ -88,7 +84,7 @@ def run_parsing_pipeline(
             logger.warning("LLM parser failed: %s", exc)
             errors.append({
                 "row": -1,
-                "error": f"LLM ({settings.llm_primary_parser}): {exc}",
+                "error": f"LLM (openai): {exc}",
                 "text": full_text[:200],
                 "severity": "error",
             })
@@ -106,21 +102,13 @@ def run_parsing_pipeline(
         })
         records = enforce_single_position_per_row(expand_blocks_to_rows(blocks))
 
-    # FR 15.3: Claude ревью спорных (если основной — OpenAI; или наоборот при A/B)
-    if settings.llm_review_disputed and settings.anthropic_api_key and settings.llm_primary_parser == "openai":
-        try:
-            records = review_all_disputed(records, full_text)
-        except Exception as exc:
-            logger.warning("Claude review failed: %s", exc)
-            errors.append({"row": -1, "error": f"Claude review: {exc}", "severity": "warning"})
-
     logger.info(
         "Pipeline: %d blocks → %d logical → %d positions | ASR=%s LLM=%s",
         n_blocks,
         n_logical,
         len(records),
         settings.asr_provider,
-        settings.llm_primary_parser if _llm_available() else "regex",
+        "openai" if _llm_available() else "regex",
     )
 
     return ParseResult(

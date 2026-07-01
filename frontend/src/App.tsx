@@ -4,23 +4,22 @@ import {
   PIPELINE_STEPS,
   canEdit,
   confirmSession,
-  fieldLabel,
+  exportRailwayRowsXlsx,
+  extractRailwayRows,
   formatTime,
   getJob,
   getSession,
   isAdmin,
-  issueText,
   processSession,
   saveSession,
   uploadAudio,
+  type RailwayRow,
 } from "./api";
-import { downloadRailwayRowsXlsx } from "./railwayExcel";
-import { parsedRowsFromTrackRecords } from "./parsedRowsFromRecords";
 import { type AuthUser, checkHealth, clearAuth, fetchMe, getUser } from "./auth";
 import { healthUrl } from "./config";
 import Login from "./Login";
 import { APP_BRAND_ACCENT, APP_BRAND_MAIN, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
-import { pickTableView, type MergedTableView } from "./mergeSessions";
+import { FORM_COLUMNS, toDisplayRows } from "./railway/display";
 import { AccountPanel } from "./profile/AccountPanel";
 import { ProfileAvatar } from "./profile/ProfileAvatar";
 
@@ -121,7 +120,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [tableView, setTableView] = useState<"long" | "wide">("long");
+  const [transcriptDraft, setTranscriptDraft] = useState("");
+  const [railwayRows, setRailwayRows] = useState<RailwayRow[]>([]);
   const [accountOpen, setAccountOpen] = useState(false);
   const [uploadBatch, setUploadBatch] = useState<AudioSession[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -171,6 +171,16 @@ export default function App() {
       window.clearTimeout(fallback);
     };
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    if (session.full_transcript != null) {
+      setTranscriptDraft(session.full_transcript);
+    }
+    if (session.railway_rows?.length) {
+      setRailwayRows(session.railway_rows);
+    }
+  }, [session?.id, session?.full_transcript, session?.railway_rows]);
 
   const handleFiles = async (files: File[]) => {
     if (!editable || files.length === 0) return;
@@ -222,6 +232,9 @@ export default function App() {
       }
       setSession(processed);
       setUploadBatch((prev) => upsertBatchSession(prev, processed));
+      if (processed.full_transcript) {
+        setTranscriptDraft(processed.full_transcript);
+      }
       return processed;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка обработки");
@@ -328,6 +341,20 @@ export default function App() {
     setAccountOpen(false);
   };
 
+  const handleExtractTable = async () => {
+    if (!session || !editable || !transcriptDraft.trim()) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const rows = await extractRailwayRows(transcriptDraft, session.id);
+      setRailwayRows(rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка формирования таблицы");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOpenSession = async (sessionId: number) => {
     setError(null);
     setLoading(true);
@@ -335,6 +362,8 @@ export default function App() {
       const loaded = await getSession(sessionId);
       setSession(loaded);
       setUploadBatch((prev) => upsertBatchSession(prev, loaded));
+      setTranscriptDraft(loaded.full_transcript ?? "");
+      setRailwayRows(loaded.railway_rows ?? []);
       setSaved(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось открыть запись");
@@ -343,19 +372,16 @@ export default function App() {
     }
   };
 
-  const handleExcelDownload = () => {
-    const view = pickTableView(session, uploadBatch);
-    if (!view || view.records.length === 0) return;
-
+  const handleExcelDownload = async () => {
+    if (railwayRows.length === 0) return;
+    setLoading(true);
     try {
-      const parsedRows = parsedRowsFromTrackRecords(view.records);
-      downloadRailwayRowsXlsx(parsedRows, {
-        fileName: excelFileName(view),
-        sheetName: "Ведомость",
-        includeSourceText: false,
-      });
+      const base = session?.original_name?.replace(/\.[^.]+$/, "") ?? "railway_table";
+      await exportRailwayRowsXlsx(railwayRows, { fileName: `${base}.xlsx` });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка выгрузки Excel");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -398,25 +424,9 @@ export default function App() {
     );
   }
 
-  const mergedTable = pickTableView(session, uploadBatch);
-
-  const disputedCount =
-    mergedTable?.records.reduce((n, r) => n + (r.disputed_fields?.length ?? 0), 0) ?? 0;
-
-  const disputedRows =
-    mergedTable?.records
-      .map((r, i) => ({ row: i, record: r }))
-      .filter(({ record }) => (record.disputed_fields?.length ?? 0) > 0) ?? [];
-
-  const unknownTerms =
-    mergedTable?.unknown_terms.filter((t) => (t.term || "").trim()) ?? [];
-
-  const hasWarningsPanel =
-    !!mergedTable &&
-    (disputedRows.length > 0 ||
-      (mergedTable.validation_warnings?.length ?? 0) > 0 ||
-      (mergedTable.parse_errors?.length ?? 0) > 0 ||
-      unknownTerms.length > 0);
+  const displayRows = toDisplayRows(railwayRows);
+  const warningCount = railwayRows.reduce((n, row) => n + (row.warnings?.length ?? 0), 0);
+  const hasTranscript = Boolean(transcriptDraft.trim());
 
   const pendingUploadCount = uploadBatch.filter((s) => s.status === "uploaded").length;
 
@@ -494,7 +504,7 @@ export default function App() {
                   session.active_job?.status === "running"
                 }
               >
-                {loading ? queueStatus || "Обработка…" : "Обработать"}
+                {loading ? queueStatus || "Расшифровка…" : "Расшифровать"}
               </button>
               {pendingUploadCount > 1 && (
                 <button
@@ -524,26 +534,46 @@ export default function App() {
                 ))}
               </ul>
             )}
-            {session && <SessionMeta session={session} disputedCount={disputedCount} />}
+            {session && <SessionMeta session={session} disputedCount={warningCount} />}
             {error && <div className="error">{error}</div>}
           </section>
         )}
 
         {!editable && session && (
           <section className="panel carbon-panel upload-panel">
-            <SessionMeta session={session} disputedCount={disputedCount} />
+            <SessionMeta session={session} disputedCount={warningCount} />
+          </section>
+        )}
+
+        {editable && session && hasTranscript && (
+          <section className="panel carbon-panel transcript-panel">
+            <h2>Транскрипт (можно править перед таблицей)</h2>
+            {session.asr_avg_confidence != null && (
+              <p className="hint">Средняя уверенность ASR: {(session.asr_avg_confidence * 100).toFixed(0)}%</p>
+            )}
+            <textarea
+              className="transcript-editor"
+              rows={8}
+              value={transcriptDraft}
+              onChange={(e) => setTranscriptDraft(e.target.value)}
+              disabled={loading}
+            />
+            <div className="upload-actions" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleExtractTable()}
+                disabled={loading || !transcriptDraft.trim()}
+              >
+                {loading ? "Формирование…" : "Сформировать таблицу"}
+              </button>
+            </div>
           </section>
         )}
 
         {adminView && session?.full_transcript && (
           <section className="panel carbon-panel transcript-panel">
-            <h2>Шаг 3–4: ASR и логические блоки</h2>
-            {session.logical_blocks.length > 0 && session.records.length > 0 && (
-              <p className="hint multi-record-summary">
-                1 аудио → {session.logical_records_count || session.logical_blocks.length} лог. записей →{" "}
-                {session.positions_count || session.records.length} позиций (строк)
-              </p>
-            )}
+            <h2>Yandex SpeechKit — сегменты</h2>
             {session.asr_avg_confidence != null && (
               <p className="hint">Средняя уверенность ASR: {(session.asr_avg_confidence * 100).toFixed(0)}%</p>
             )}
@@ -605,34 +635,11 @@ export default function App() {
           </section>
         )}
 
-        {mergedTable && mergedTable.records.length > 0 && (
+        {railwayRows.length > 0 && (
           <section className="panel carbon-panel table-panel">
             <div className="table-header">
-              <h2>
-                {adminView
-                  ? `Шаг 9: Построчная таблица (${mergedTable.positions_count} позиций)`
-                  : `Таблица результатов (${mergedTable.positions_count} поз.)`}
-              </h2>
-              {mergedTable.session_ids.length > 1 && (
-                <p className="hint table-batch-hint">
-                  Объединено из {mergedTable.session_ids.length} записей: {mergedTable.source_names.join(", ")}
-                </p>
-              )}
+              <h2>Таблица ({railwayRows.length} строк)</h2>
               <div className="table-actions">
-                <div className="view-toggle">
-                  <button
-                    className={`btn btn-secondary btn-sm ${tableView === "long" ? "active" : ""}`}
-                    onClick={() => setTableView("long")}
-                  >
-                    Построчная
-                  </button>
-                  <button
-                    className={`btn btn-secondary btn-sm ${tableView === "wide" ? "active" : ""}`}
-                    onClick={() => setTableView("wide")}
-                  >
-                    Сводная
-                  </button>
-                </div>
                 {editable && (
                   <>
                     <button className="btn btn-secondary" onClick={handleSave} disabled={loading}>
@@ -647,147 +654,55 @@ export default function App() {
                     </button>
                   </>
                 )}
-                <button type="button" className="btn btn-primary" onClick={handleExcelDownload} disabled={loading}>
+                <button type="button" className="btn btn-primary" onClick={() => void handleExcelDownload()} disabled={loading}>
                   Excel
                 </button>
               </div>
             </div>
             {!editable && <p className="hint">Режим просмотра (viewer).</p>}
-            <div className="table-layout">
-              <div className="table-main">
-                {tableView === "wide" && mergedTable.records_wide ? (
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          {mergedTable.records_wide.columns.map((c) => (
-                            <th key={c}>{c}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mergedTable.records_wide.rows.map((row, i) => (
-                          <tr key={i}>
-                            {mergedTable.records_wide!.columns.map((c) => (
-                              <td key={c}>{row[c] ?? "—"}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : mergedTable.records_form ? (
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          {mergedTable.records_form.columns.map((c) => (
-                            <th key={c}>{c}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mergedTable.records_form.rows.map((row, i) => (
-                          <tr key={i}>
-                            {mergedTable.records_form!.columns.map((c) => (
-                              <td key={c}>{row[c] ?? "—"}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="hint">
-                    Нет данных для таблицы. Переобработайте файл после обновления сервера.
-                  </p>
-                )}
-              </div>
-              {(mergedTable.records_wide || mergedTable.records_form) && (
-                <aside className="table-aside" aria-hidden>
-                  <img src="/surprise.png" alt="" className="table-aside-art" />
-                </aside>
-              )}
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    {FORM_COLUMNS.map((c) => (
+                      <th key={c}>{c}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayRows.map((row, i) => (
+                    <tr key={i}>
+                      {FORM_COLUMNS.map((c) => (
+                        <td key={c}>{row[c] ?? "—"}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
         )}
 
-        {hasWarningsPanel && (
+        {warningCount > 0 && (
           <section className="panel carbon-panel meta-panel">
-            <h2>{adminView ? "Шаг 7: Предупреждения" : "Требует проверки"}</h2>
-            {disputedRows.length > 0 && (
-              <div className="meta-block">
-                <h3>Спорные поля ({disputedCount})</h3>
-                <ul>
-                  {disputedRows.map(({ row, record }) => (
-                    <li key={record.id ?? row}>
-                      <strong>Строка {row + 1}:</strong>{" "}
-                      {record.disputed_fields.map((f) => fieldLabel(f)).join(", ")}
-                      {record.km != null && record.piket != null && (
-                        <span className="issue-context">
-                          {" "}
-                          (км {record.km}, пикет {record.piket})
-                        </span>
-                      )}
-                      {record.raw_text && (
-                        <div className="issue-fragment">«{record.raw_text.slice(0, 160)}»</div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {mergedTable && mergedTable.validation_warnings.length > 0 && (
-              <div className="meta-block">
-                <h3>Валидация ({mergedTable.validation_warnings.length})</h3>
-                <ul>
-                  {mergedTable.validation_warnings.map((w, i) => (
-                    <li key={i}>
-                      {w.row != null && w.row >= 0 ? `Строка ${w.row + 1}: ` : ""}
-                      {issueText(w)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {mergedTable && mergedTable.parse_errors.length > 0 && (
-              <div className="meta-block">
-                <h3>Ошибки разбора ({mergedTable.parse_errors.length})</h3>
-                <ul>
-                  {mergedTable.parse_errors.map((e, i) => (
-                    <li key={i}>
-                      {e.row != null && e.row >= 0 ? `Строка ${e.row + 1}: ` : "Общее: "}
-                      {issueText(e)}
-                      {e.text && <div className="issue-fragment">«{e.text}»</div>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {unknownTerms.length > 0 && (
-              <div className="meta-block">
-                <h3>Неизвестные термины ({unknownTerms.length})</h3>
-                <p className="hint meta-hint">
-                  Слова вне словаря — возможная ошибка ASR; проверьте строку таблицы.
-                </p>
-                <div className="terms-cloud">
-                  {unknownTerms.slice(0, 20).map((t) => (
-                    <span key={t.term} className="term-tag" title={`встречается ${t.count}×`}>
-                      {t.term}
-                      {t.count > 1 ? ` ×${t.count}` : ""}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+            <h2>Предупреждения LLM</h2>
+            <ul>
+              {railwayRows.flatMap((row, index) =>
+                (row.warnings ?? []).map((warning, wi) => (
+                  <li key={`${index}-${wi}`}>
+                    <strong>Строка {index + 1}:</strong> {warning}
+                  </li>
+                ))
+              )}
+            </ul>
           </section>
         )}
 
         {session && !session.full_transcript && !loading && editable && (
           <section className="panel carbon-panel empty-panel">
             <p>
-              Файл <strong>{session.original_name}</strong> загружен. Нажмите «Обработать» — распознавание и
-              разбор выполняются на сервере.
+              Файл <strong>{session.original_name}</strong> загружен. Нажмите «Расшифровать» — аудио
+              будет отправлено в Yandex SpeechKit.
             </p>
           </section>
         )}
@@ -827,12 +742,4 @@ function statusLabel(status: string): string {
     error: "Ошибка",
   };
   return map[status] ?? status;
-}
-
-function excelFileName(view: MergedTableView): string {
-  if (view.source_names.length === 1) {
-    const base = view.source_names[0].replace(/\.[^.]+$/, "").replace(/[^\w\u0400-\u04FF.-]+/g, "_");
-    return `${base || "vedomost"}-defekty.xlsx`;
-  }
-  return `vedomost-${view.session_ids.length}-sessions.xlsx`;
 }
