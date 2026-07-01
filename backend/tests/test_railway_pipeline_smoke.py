@@ -74,7 +74,8 @@ def test_normalize_dedupes_note():
                         "sourceText": "стрелочный перевод номер 10 износ рамного рельса 7 мм острие остряка",
                         "warnings": [],
                     }
-                ]
+                ],
+                "warnings": [],
             },
             lambda rows: (
                 len(rows) == 1
@@ -98,7 +99,8 @@ def test_normalize_dedupes_note():
                         "sourceText": "путь 15 ширина колеи 1544 мм",
                         "warnings": [],
                     }
-                ]
+                ],
+                "warnings": [],
             },
             lambda rows: (
                 len(rows) == 1
@@ -132,7 +134,8 @@ def test_normalize_dedupes_note():
                         "sourceText": "и уширение колеи 1543 мм",
                         "warnings": [],
                     },
-                ]
+                ],
+                "warnings": [],
             },
             lambda rows: (
                 len(rows) == 2
@@ -154,7 +157,8 @@ def test_normalize_dedupes_note():
                         "sourceText": "перегон апатиты оленья 1418 километр пикет 2 87 метр отсутствует 1 стыковой болт",
                         "warnings": [],
                     }
-                ]
+                ],
+                "warnings": [],
             },
             lambda rows: (
                 len(rows) == 1
@@ -168,4 +172,7 @@ def test_extract_railway_rows_mocked(llm_json, checks):
     with patch("app.services.llm.extract_railway_rows.get_llm_provider") as mock_provider:
         mock_provider.return_value.complete_json.return_value = json.dumps(llm_json, ensure_ascii=False)
         rows = extract_rows_from_transcript("dummy transcript")
+        mock_provider.return_value.complete_json.assert_called_once()
+        call_kwargs = mock_provider.return_value.complete_json.call_args.kwargs
+        assert call_kwargs["user"] == "Transcript:\ndummy transcript"
     assert checks(rows)

@@ -17,6 +17,7 @@ export const railwayRowSchema = z.object({
 
 export const railwayRowsResponseSchema = z.object({
   rows: z.array(railwayRowSchema),
+  warnings: z.array(z.string()).optional(),
 });
 
 export function parseRailwayRowsPayload(data: unknown): RailwayRow[] {

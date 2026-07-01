@@ -3,41 +3,53 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from app.services.llm.provider import get_llm_provider
 from app.services.railway.normalize_railway_rows import normalize_railway_rows
 from app.services.railway.schema import parse_llm_rows_payload
 from app.services.railway.types import RailwayRow
 
-EXTRACTION_SYSTEM_PROMPT = """Ты извлекаешь строки таблицы обхода железнодорожного пути из русской ASR-диктовки.
+logger = logging.getLogger(__name__)
+
+EXTRACTION_SYSTEM_PROMPT = """Ты извлекаешь строки дефектной ведомости железнодорожной инфраструктуры из расшифровки речи.
+
+Требования:
+1. Верни только JSON.
+2. Верхний объект должен быть формата:
+{
+  "rows": RailwayRow[],
+  "warnings": string[]
+}
+
+Где RailwayRow:
+{
+  "location": string | null,
+  "assetKind": "track" | "switch" | null,
+  "assetNumber": string | null,
+  "reference": string | null,
+  "defect": string | null,
+  "speedLimit": number | null,
+  "note": string | null,
+  "sourceText": string,
+  "warnings": string[]
+}
 
 Правила:
-1. Одна неисправность = одна строка.
-2. Используй ТОЛЬКО информацию из transcript.
-3. Ничего не придумывай:
-   - не добавляй 2288р
-   - не добавляй ограничения скорости, если их нет в тексте
-   - не добавляй нормативные решения
-4. Если в одном фрагменте две неисправности — верни две строки.
-5. Наследуй контекст между фрагментами:
-   - станция / перегон
-   - путь / стрелочный перевод
-   - привязка (км, пк, м)
-   - примечание вроде «звено 2»
-6. sourceText — дословный фрагмент текста именно этой строки.
-7. Если не уверен — оставь поле null и добавь пояснение в warnings.
-
-Поля строки:
-- location: станция или перегон
-- assetKind: "track" | "switch" | null
-- assetNumber: номер пути или перевода
-- reference: привязка «1418 км, пк 2, 87 м»
-- defect: выявленная неисправность
-- speedLimit: число км/ч только если явно названо
-- note: уточнения (острие остряка, звено N и т.п.)
-- sourceText: фрагмент transcript
-- warnings: массив строк (может быть пустым)
-"""
+- Одна неисправность = одна строка.
+- Используй только факты из текста.
+- Ничего не придумывай.
+- Если ограничение скорости явно не сказано, ставь null.
+- Если нормативка явно не сказана, не добавляй ее.
+- Если в одном предложении несколько неисправностей, разбей на несколько строк.
+- Наследуй контекст от предыдущих фраз, если он очевиден:
+  - станция / перегон
+  - путь / стрелочный перевод
+  - привязка
+  - примечание
+- sourceText должен быть именно тем фрагментом transcript, из которого получена эта строка.
+- Если есть сомнение, оставь поле null и добавь warning.
+- Не добавляй текст вне JSON."""
 
 ROWS_JSON_SCHEMA: dict = {
     "name": "railway_rows",
@@ -83,8 +95,12 @@ ROWS_JSON_SCHEMA: dict = {
                     ],
                 },
             },
+            "warnings": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
         },
-        "required": ["rows"],
+        "required": ["rows", "warnings"],
     },
 }
 
@@ -97,8 +113,13 @@ def extract_railway_rows(transcript: str) -> list[RailwayRow]:
     provider = get_llm_provider()
     raw = provider.complete_json(
         system=EXTRACTION_SYSTEM_PROMPT,
-        user=json.dumps({"transcript": text}, ensure_ascii=False),
+        user=f"Transcript:\n{text}",
         schema=ROWS_JSON_SCHEMA,
     )
+    data = json.loads(raw or "{}")
+    if isinstance(data, dict):
+        top_warnings = data.get("warnings") or []
+        if top_warnings:
+            logger.info("LLM extraction warnings: %s", top_warnings)
     rows = parse_llm_rows_payload(raw)
     return normalize_railway_rows(rows)
