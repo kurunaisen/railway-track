@@ -18,14 +18,27 @@ def run_schema_migrations() -> None:
         return
     columns = {col["name"] for col in inspector.get_columns("users")}
     if "avatar_id" in columns:
+        pass
+    else:
+        dialect = engine.dialect.name
+        with engine.begin() as conn:
+            if dialect == "sqlite":
+                conn.execute(text("ALTER TABLE users ADD COLUMN avatar_id VARCHAR(32) DEFAULT 'star'"))
+            else:
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_id VARCHAR(32) DEFAULT 'star'"))
+        logger.info("Added users.avatar_id column")
+
+    if "inspection_records" not in inspector.get_table_names():
         return
-    dialect = engine.dialect.name
-    with engine.begin() as conn:
-        if dialect == "sqlite":
-            conn.execute(text("ALTER TABLE users ADD COLUMN avatar_id VARCHAR(32) DEFAULT 'star'"))
-        else:
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_id VARCHAR(32) DEFAULT 'star'"))
-    logger.info("Added users.avatar_id column")
+    rec_cols = {col["name"] for col in inspector.get_columns("inspection_records")}
+    if "switch_number" not in rec_cols:
+        dialect = engine.dialect.name
+        with engine.begin() as conn:
+            if dialect == "sqlite":
+                conn.execute(text("ALTER TABLE inspection_records ADD COLUMN switch_number VARCHAR(64)"))
+            else:
+                conn.execute(text("ALTER TABLE inspection_records ADD COLUMN IF NOT EXISTS switch_number VARCHAR(64)"))
+        logger.info("Added inspection_records.switch_number column")
 
 
 def seed_default_admin() -> None:

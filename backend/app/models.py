@@ -201,6 +201,7 @@ class InspectionRecord(Base):
     section_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     haul_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     track_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    switch_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
     km_value: Mapped[str | None] = mapped_column(String(64), nullable=True)
     picket_value: Mapped[str | None] = mapped_column(String(64), nullable=True)
     object_name: Mapped[str | None] = mapped_column(String(256), nullable=True)

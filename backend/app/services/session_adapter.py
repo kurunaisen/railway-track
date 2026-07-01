@@ -24,6 +24,8 @@ from app.services.inspection_repository import load_structured_records
 from app.services.transcript_crypto import decrypt_transcript_text
 from app.services.inspection_repository import FlatInspectionRow, load_active_job, load_flat_rows, load_latest_done_job
 from app.services.inspection_form import build_form_rows
+from app.services.parser import ParsedRecord
+from app.services.switch_context import propagate_switch_context
 from app.services.pipeline_issues import normalize_pipeline_issues
 from app.services.wide_table import build_wide_rows
 
@@ -41,6 +43,31 @@ def _derive_status(audio: AudioFile, active: ProcessingJob | None, done: Process
             return "saved"
         return "processed"
     return "uploaded"
+
+
+def _enrich_switch_from_transcript(
+    rows: list[FlatInspectionRow],
+    full_transcript: str | None,
+) -> None:
+    """Старые записи без switch_number в БД — восстановить из ASR."""
+    if not full_transcript or not rows or all(r.switch for r in rows):
+        return
+    tmp = [
+        ParsedRecord(
+            logical_record_index=r.logical_record_index,
+            put=r.put,
+            switch=r.switch,
+        )
+        for r in rows
+    ]
+    propagate_switch_context(tmp, full_transcript)
+    by_idx = {t.logical_record_index: t for t in tmp}
+    for row in rows:
+        if row.switch:
+            continue
+        src = by_idx.get(row.logical_record_index)
+        if src and src.switch:
+            row.switch = src.switch
 
 
 def _flat_to_track_out(row: FlatInspectionRow) -> TrackRecordOut:
@@ -144,6 +171,7 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
             full_transcript = decrypt_transcript_text(
                 done.transcript.full_text, done.transcript.text_encrypted
             )
+            _enrich_switch_from_transcript(rows, full_transcript)
             asr_avg = done.transcript.confidence_avg
             segments = [
                 TranscriptSegmentOut(

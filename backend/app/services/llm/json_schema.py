@@ -29,6 +29,7 @@ STRUCTURED_JSON_EXAMPLE = {
             "end_sec": None,
             "haul_name": "А-Б",
             "track_number": "2",
+            "switch_number": "15",
             "km_value": "35",
             "picket_value": "5+20",
             "items": [
@@ -50,7 +51,7 @@ _LLM_SYSTEM_RULES_BASE = """Роль: текст → структура. НЕ ф
 Каждый элемент records[] — одна логическая запись (перегон/км/пикет):
 - sequence_number: int, с 1, порядок произнесения
 - start_sec, end_sec: float|null — из ASR-сегментов
-- haul_name, track_number, km_value, picket_value, section_name, date_value, comment, object_name
+- haul_name, track_number, switch_number, km_value, picket_value, section_name, date_value, comment, object_name
 - items[] — позиции внутри записи (один параметр/дефект/V огр. на item)
 
 Каждый item:
@@ -80,7 +81,8 @@ _LLM_SYSTEM_RULES_BASE = """Роль: текст → структура. НЕ ф
 - Ограничение скорости — НЕ defect. Это следствие неисправности: speed_limit=60, unit «км/ч», position_type «speed_limit»
 - «ограничение скорости 60», «скорость 60 км/ч», «скорость не более 40» → item speed_limit с value_numeric=число, без defect_text
 - Если в одной записи и дефект, и скорость — два items: defect + speed_limit (скорость не дублировать в defect_text)
-- После «на станции … N путь» все следующие items без нового перегона и без км/пикета — та же section_name и track_number (даже после «И уширение колеи…»)
+- track_number — номер пути («5 путь» → «5»); switch_number — номер стрелочного перевода («стрелочный перевод 15» → «15»), отдельно от track_number
+- После «на станции … N путь стрелочный перевод M» items наследуют section_name, track_number и switch_number
 """
 
 
@@ -141,6 +143,7 @@ def structured_to_parsed_rows(data: dict) -> list[ParsedRecord]:
         ctx_fields = {
             "peregon": rec.get("haul_name"),
             "put": str(rec["track_number"]) if rec.get("track_number") is not None else None,
+            "switch": str(rec["switch_number"]) if rec.get("switch_number") is not None else None,
             "km": str(rec["km_value"]) if rec.get("km_value") is not None else None,
             "piket": str(rec["picket_value"]) if rec.get("picket_value") is not None else None,
             "record_date": rec.get("date_value"),

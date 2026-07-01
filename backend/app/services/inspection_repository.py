@@ -31,6 +31,7 @@ class FlatInspectionRow:
     uchastok: str | None = None
     peregon: str | None = None
     put: str | None = None
+    switch: str | None = None
     km: str | None = None
     piket: str | None = None
     obekt: str | None = None
@@ -176,6 +177,7 @@ def save_job_results(
             section_name=first.uchastok,
             haul_name=first.peregon,
             track_number=first.put,
+            switch_number=first.switch,
             km_value=first.km,
             picket_value=first.piket,
             object_name=first.obekt,
@@ -307,6 +309,7 @@ def load_flat_rows(job: ProcessingJob, audio_file_id: int) -> list[FlatInspectio
                     uchastok=insp_rec.section_name,
                     peregon=insp_rec.haul_name,
                     put=insp_rec.track_number,
+                    switch=insp_rec.switch_number,
                     km=insp_rec.km_value,
                     piket=insp_rec.picket_value,
                     obekt=insp_rec.object_name,
@@ -358,6 +361,7 @@ def flat_row_from_item(item: InspectionItem, record: InspectionRecord, audio_fil
         uchastok=record.section_name,
         peregon=record.haul_name,
         put=record.track_number,
+        switch=record.switch_number,
         km=record.km_value,
         piket=record.picket_value,
         obekt=record.object_name,
@@ -387,6 +391,7 @@ def apply_flat_update(item: InspectionItem, record: InspectionRecord, data: dict
         "uchastok": ("record", "section_name"),
         "peregon": ("record", "haul_name"),
         "put": ("record", "track_number"),
+        "switch": ("record", "switch_number"),
         "km": ("record", "km_value"),
         "piket": ("record", "picket_value"),
         "obekt": ("record", "object_name"),
@@ -455,6 +460,7 @@ def record_to_structured_dict(rec: InspectionRecord) -> dict:
         "section_name": rec.section_name,
         "haul_name": rec.haul_name,
         "track_number": rec.track_number,
+        "switch_number": rec.switch_number,
         "km_value": rec.km_value,
         "picket_value": rec.picket_value,
         "object_name": rec.object_name,
@@ -514,6 +520,7 @@ def build_structured_from_parsed(rows: list[ParsedRecord]) -> dict:
             "end_sec": first.segment_end,
             "haul_name": first.peregon,
             "track_number": first.put,
+            "switch_number": first.switch,
             "km_value": first.km,
             "picket_value": first.piket,
             "items": items,

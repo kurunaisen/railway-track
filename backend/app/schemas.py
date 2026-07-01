@@ -192,6 +192,7 @@ class InspectionRecordStructured(BaseModel):
     section_name: str | None = None
     haul_name: str | None = None
     track_number: str | None = None
+    switch_number: str | None = None
     km_value: str | None = None
     picket_value: str | None = None
     object_name: str | None = None
