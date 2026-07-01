@@ -25,6 +25,7 @@ from app.services.station_context import propagate_station_context
 from app.services.gauge_norms import is_gauge_context
 from app.services.asr_fixes import fix_asr_transcript
 from app.services.switch_context import propagate_switch_context
+from app.services.segment_reconcile import reconcile_records_by_asr_segments
 from app.services.switch_measurement import apply_switch_measurement_context
 from app.services.track_norms import apply_track_norms_all
 from app.services.canonical_model import _location_only_fragment
@@ -331,6 +332,7 @@ def normalize_all(
     records = propagate_station_context(records)
     if source_text:
         records = propagate_switch_context(records, source_text)
+        records = reconcile_records_by_asr_segments(records, source_text)
     records = apply_switch_measurement_context(records)
     records = [normalize_record(r) for r in records]
     records = apply_track_norms_all(records)

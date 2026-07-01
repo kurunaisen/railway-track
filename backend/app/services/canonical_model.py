@@ -490,8 +490,10 @@ def parse_position(fragment: str, position_index: int) -> PositionItem:
             full_defect = compound
             after = normalized[normalized.find(compound) + len(compound):].strip(" ,:-")
             gauge_value, gauge_unit = _extract_value_unit(after)
-            if gauge_value:
+            if gauge_value and "шпал" not in compound.lower():
                 value, unit = gauge_value, gauge_unit
+            elif "шпал" in compound.lower():
+                value, unit = None, None
         item = PositionItem(
             position_index=position_index,
             position_type="defect",

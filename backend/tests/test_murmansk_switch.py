@@ -11,10 +11,44 @@ MURMANSK = (
     "острие остряка пусть 15 ширина колеи 1544 мм путь 12 3 подряд куста из 3 шпал "
     "путь 11 куст из 5 негодных шпал"
 )
+MURMANSK_KOLI = (
+    "Станция мурманск стрелочный перевод номер 10 износ рамного рельса 7 мм "
+    "острие остряка пусть 15 ширина коли 1544 мм путь 12 3 подряд куста из 3 шпал "
+    "путь 11 куст из 5 негодных шпал"
+)
 
 
 def _rows():
     return normalize_all(run_parsing_pipeline(MURMANSK).records, source_text=MURMANSK)
+
+
+def _rows_koli():
+    return normalize_all(run_parsing_pipeline(MURMANSK_KOLI).records, source_text=MURMANSK_KOLI)
+
+
+def test_asr_koli_to_kolei():
+    fixed = fix_asr_transcript(MURMANSK_KOLI)
+    assert "ширина коли" not in fixed.lower()
+    assert "ширина колеи" in fixed.lower()
+
+
+def test_koli_asr_four_rows_gauge_and_paths():
+    """Whisper: «ширина коли» — та же таблица, что и с «колеи»."""
+    rows = _rows_koli()
+    assert len(rows) == 4
+    wear = next(r for r in rows if r.defect and "рамн" in r.defect.lower())
+    gauge = next(r for r in rows if r.defect and "коле" in r.defect.lower())
+    p12 = next(r for r in rows if r.put == "12")
+    p11 = next(r for r in rows if r.put == "11")
+    assert wear.switch == "10"
+    assert wear.value == "7"
+    assert gauge.put == "15"
+    assert gauge.value == "1544"
+    assert gauge.speed_limit == "60"
+    assert "подряд" in (p12.defect or "").lower() or "3" in (p12.defect or "")
+    assert "негодн" in (p11.defect or "").lower()
+    assert p12.put == "12"
+    assert p11.put == "11"
 
 
 def test_asr_pust_to_path():
@@ -66,6 +100,53 @@ def test_path_12_and_11_sleeper_clusters():
 
 def test_four_table_rows():
     assert len(_rows()) == 4
+
+
+def test_llm_merged_gauge_into_wear_reconciled():
+    """Прод: 1544 на износе, кусты на путях 15/12 — segment reconcile."""
+    from app.services.parser import ParsedRecord
+
+    llm_rows = [
+        ParsedRecord(
+            logical_record_index=0,
+            uchastok="Мурманск",
+            put="15",
+            switch="10",
+            defect="износ рамного рельса",
+            value="1544",
+            unit="мм",
+            comment="и острие остряка",
+            raw_text=MURMANSK_KOLI[:90],
+            position_type="defect",
+        ),
+        ParsedRecord(
+            logical_record_index=1,
+            uchastok="Мурманск",
+            put="15",
+            defect="куста из 3 шпал",
+            raw_text="путь 15",
+            position_type="defect",
+        ),
+        ParsedRecord(
+            logical_record_index=2,
+            uchastok="Мурманск",
+            put="12",
+            defect="куст негодных шпал 5",
+            raw_text="путь 12",
+            position_type="defect",
+        ),
+    ]
+    rows = normalize_all(llm_rows, source_text=MURMANSK_KOLI)
+    assert len(rows) == 4
+    wear = next(r for r in rows if r.defect and "рамн" in r.defect.lower())
+    gauge = next(r for r in rows if r.defect and "коле" in r.defect.lower())
+    assert wear.put is None
+    assert wear.switch == "10"
+    assert wear.value == "7"
+    assert gauge.put == "15"
+    assert gauge.value == "1544"
+    assert next(r for r in rows if r.put == "12").defect
+    assert next(r for r in rows if r.put == "11").defect
 
 
 def test_llm_wrong_path_on_wear_row_reconciled():

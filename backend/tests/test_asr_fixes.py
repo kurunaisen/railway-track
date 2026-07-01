@@ -12,3 +12,8 @@ def test_pust_after_switch_tip():
 def test_pust_before_gauge():
     text = "пусть 15 ширина колеи 1544"
     assert fix_asr_transcript(text).lower().startswith("путь 15")
+
+
+def test_koli_to_kolei():
+    text = "путь 15 ширина коли 1544"
+    assert "ширина колеи" in fix_asr_transcript(text).lower()
