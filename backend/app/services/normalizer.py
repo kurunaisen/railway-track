@@ -22,6 +22,7 @@ from app.services.locations import is_peregon_haul
 from app.services.stations import normalize_station_name, CANONICAL_STATIONS
 from app.services.station_km import sanitize_station_km
 from app.services.station_context import propagate_station_context
+from app.services.gauge_norms import is_gauge_context
 from app.services.asr_fixes import fix_asr_transcript
 from app.services.switch_context import propagate_switch_context
 from app.services.switch_measurement import apply_switch_measurement_context
@@ -299,6 +300,20 @@ def _drop_location_only_rows(records: list[ParsedRecord]) -> list[ParsedRecord]:
     ]
 
 
+def _clear_ungrounded_speed_limit(record: ParsedRecord) -> None:
+    """LLM иногда ставит V огр. от колеи на строку с износом."""
+    if not record.speed_limit or record.position_type == "speed_limit":
+        return
+    blob = f"{record.defect or ''} {record.raw_text or ''}".lower()
+    if re.search(r"скорост|ограничен", blob):
+        return
+    if is_gauge_context(blob):
+        return
+    defect = (record.defect or "").lower()
+    if "износ" in defect and "рамн" in defect:
+        record.speed_limit = None
+
+
 def normalize_all(
     records: list[ParsedRecord],
     source_text: str | None = None,
@@ -319,4 +334,6 @@ def normalize_all(
     records = apply_switch_measurement_context(records)
     records = [normalize_record(r) for r in records]
     records = apply_track_norms_all(records)
+    for record in records:
+        _clear_ungrounded_speed_limit(record)
     return drop_orphan_speed_rows(records)

@@ -81,11 +81,17 @@ def _is_spurious_switch_tip_row(record: ParsedRecord) -> bool:
 
 
 def apply_switch_measurement_context(records: list[ParsedRecord]) -> list[ParsedRecord]:
-    """Точка промера → примечание; ложные строки «острие остряка 15» отбрасываем."""
+    """Точка промера → примечание только у износа; ложные строки отбрасываем."""
     result: list[ParsedRecord] = []
     for record in records:
         if _is_spurious_switch_tip_row(record):
             continue
         _enrich_wear_at_switch_tip(record)
+        if record.comment and SWITCH_TIP_NOTE in record.comment.lower():
+            if not has_ram_rail_wear(record.raw_text or "") and not (
+                record.defect and "рамн" in record.defect.lower()
+            ):
+                parts = [p.strip() for p in record.comment.split(";") if p.strip().lower() != SWITCH_TIP_NOTE]
+                record.comment = "; ".join(parts) if parts else None
         result.append(record)
     return result

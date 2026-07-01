@@ -1,10 +1,9 @@
-"""Наследование номера стрелочного перевода из полного текста (LLM не всегда заполняет switch)."""
+"""Наследование и сверка put/switch по сегментам ASR-текста (перебивает ошибки LLM)."""
 
 from __future__ import annotations
 
 from app.services.asr_fixes import fix_asr_transcript
 from app.services.canonical_model import _split_by_location
-from app.services.switch_measurement import path_block_keeps_switch_context
 from app.services.parser import (
     ParsedRecord,
     _extract_put,
@@ -12,13 +11,50 @@ from app.services.parser import (
     _normalize_text,
     has_path_binding,
 )
+from app.services.switch_measurement import path_block_keeps_switch_context
 
 
 def _segment_put_switch(part: str) -> tuple[str | None, str | None]:
-    """Путь — только если в фрагменте явно «N путь»; стр.п. — из любого упоминания."""
     normalized = _normalize_text(part)
     put = _extract_put(normalized) if has_path_binding(normalized) else None
     return put, _extract_switch(normalized)
+
+
+def _resolve_segment_location(
+    part: str,
+    inherited_switch: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """(put, switch, inherited_switch после сегмента)."""
+    seg_put, seg_switch = _segment_put_switch(part)
+    switch = inherited_switch
+
+    if seg_switch:
+        switch = seg_switch
+
+    if seg_put is not None:
+        put = seg_put
+        if path_block_keeps_switch_context(part):
+            record_switch = seg_switch or switch
+        else:
+            record_switch = seg_switch
+            switch = None
+        return put, record_switch, switch
+
+    if seg_switch:
+        return None, seg_switch, seg_switch
+
+    return None, switch, switch
+
+
+def _apply_segment_to_record(
+    record: ParsedRecord,
+    part: str,
+    inherited_switch: str | None,
+) -> str | None:
+    seg_put, seg_switch, inherited_switch = _resolve_segment_location(part, inherited_switch)
+    record.put = seg_put
+    record.switch = seg_switch
+    return inherited_switch
 
 
 def propagate_switch_context(
@@ -26,42 +62,39 @@ def propagate_switch_context(
     source_text: str | None,
 ) -> list[ParsedRecord]:
     """
-    Заполняет put/switch из полного ASR-текста по порядку логических записей.
-    Сегменты совпадают с _split_by_location: блок «стр.п. 10» без «N путь» не получает put.
+    Сверяет put/switch с сегментами _split_by_location и перезаписывает поля.
+    LLM часто размазывает «путь 15» и стр.п. на все строки.
     """
     if not source_text or not records:
         return records
 
     source_text = fix_asr_transcript(source_text)
     parts = _split_by_location(source_text)
-    segments = [_segment_put_switch(part) for part in parts]
-    if not segments:
-        segments = [_segment_put_switch(source_text)]
+    if not parts:
+        parts = [source_text]
+
+    ordered = sorted(
+        records,
+        key=lambda r: (r.logical_record_index if r.logical_record_index is not None else 0, r.position_index or 0),
+    )
+
+    if len(ordered) == len(parts):
+        inherited: str | None = None
+        for record, part in zip(ordered, parts):
+            inherited = _apply_segment_to_record(record, part, inherited)
+        return records
 
     indices = sorted(
         {r.logical_record_index for r in records if r.logical_record_index is not None}
     )
-    active_put: str | None = None
-    active_switch: str | None = None
-
+    inherited = None
     for i, idx in enumerate(indices):
-        seg_put, seg_switch = segments[min(i, len(segments) - 1)]
         part = parts[min(i, len(parts) - 1)]
-        if seg_put is not None:
-            active_put = seg_put
-            if not seg_switch and not path_block_keeps_switch_context(part):
-                active_switch = None
-        elif seg_switch:
-            active_put = None
-        if seg_switch:
-            active_switch = seg_switch
-
+        seg_put, seg_switch, inherited = _resolve_segment_location(part, inherited)
         for record in records:
             if record.logical_record_index != idx:
                 continue
-            if active_put and not record.put:
-                record.put = active_put
-            if active_switch and not record.switch:
-                record.switch = active_switch
+            record.put = seg_put
+            record.switch = seg_switch
 
     return records

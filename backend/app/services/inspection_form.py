@@ -118,24 +118,20 @@ def _format_path_number(num: str, rec: FormRowSource, *texts: str | None) -> str
 
 def resolve_track_parts(rec: FormRowSource) -> tuple[str | None, str | None, str | None]:
     """
-    Путь, стрелочный перевод и вид объекта (модель).
-    Возвращает (путь, стр.п., объект), напр. («2 гл.п.», «стр.п. 2», «путь, стрелочный перевод»).
+    Путь и стр.п. — только из полей put/switch записи.
+    raw_text не парсим: LLM часто кладёт туда весь блок («… путь 15 …»).
     """
-    sources = (rec.raw_text, rec.comment)
-    path_num = _explicit_path_number(*sources)
-    switch_num = _explicit_switch_number(*sources) or ((getattr(rec, "switch", None) or "").strip() or None)
-    put = (rec.put or "").strip()
+    put_val = (rec.put or "").strip()
+    switch_val = (getattr(rec, "switch", None) or "").strip() or None
 
     path_display: str | None = None
-    if path_num:
-        path_display = _format_path_number(path_num, rec, *sources)
-    elif put.isdigit():
-        path_display = _format_path_number(put, rec, *sources)
+    if put_val.isdigit():
+        path_display = _format_path_number(put_val, rec, rec.raw_text)
 
-    switch_display = f"стр.п. {switch_num}" if switch_num else None
+    switch_display = f"стр.п. {switch_val}" if switch_val else None
 
     kinds: list[str] = []
-    if path_display or _is_peregon_context(rec, *sources):
+    if path_display or _is_peregon_context(rec, rec.raw_text, rec.comment):
         kinds.append("путь")
     if switch_display:
         kinds.append("стрелочный перевод")

@@ -67,3 +67,71 @@ def test_path_12_and_11_sleeper_clusters():
 
 def test_four_table_rows():
     assert len(_rows()) == 4
+
+
+def test_llm_wrong_path_on_wear_row_reconciled():
+    """LLM размазывает путь 15 и примечание — normalize_all сверяет с ASR-сегментами."""
+    from app.services.parser import ParsedRecord
+
+    llm_rows = [
+        ParsedRecord(
+            logical_record_index=0,
+            uchastok="Мурманск",
+            put="15",
+            switch="10",
+            defect="износ рамного рельса",
+            value="7",
+            unit="мм",
+            speed_limit="60",
+            comment="в острии остряка",
+            raw_text=MURMANSK[:80],
+            position_type="defect",
+        ),
+        ParsedRecord(
+            logical_record_index=1,
+            uchastok="Мурманск",
+            put="15",
+            switch="10",
+            defect="уширение рельсовой колеи",
+            value="1544",
+            unit="мм",
+            speed_limit="60",
+            comment="в острии остряка",
+            raw_text="ширина колеи 1544",
+            position_type="defect",
+        ),
+        ParsedRecord(
+            logical_record_index=2,
+            uchastok="Мурманск",
+            put="12",
+            switch="10",
+            defect="куст шпал",
+            raw_text="путь 12 куст",
+            position_type="defect",
+        ),
+        ParsedRecord(
+            logical_record_index=3,
+            uchastok="Мурманск",
+            put="11",
+            defect="куст шпал",
+            raw_text="путь 11",
+            position_type="defect",
+        ),
+    ]
+    rows = normalize_all(llm_rows, source_text=MURMANSK)
+    f1 = record_to_form_row(rows[0], 1)
+    f2 = record_to_form_row(rows[1], 2)
+    f3 = record_to_form_row(rows[2], 3)
+    f4 = record_to_form_row(rows[3], 4)
+    assert rows[0].put is None
+    assert f1["№ пути, стрелочного перевода"] == "стр.п. 10"
+    assert f1["Примечание"] and "остри" in f1["Примечание"].lower()
+    assert rows[0].speed_limit is None
+    assert rows[1].put == "15"
+    assert "15" in (f2["№ пути, стрелочного перевода"] or "")
+    assert not f2.get("Примечание") or "остри" not in (f2["Примечание"] or "").lower()
+    assert rows[2].put == "12"
+    assert rows[2].switch is None
+    assert rows[3].put == "11"
+    assert f4["№ пути, стрелочного перевода"] == "11"
+

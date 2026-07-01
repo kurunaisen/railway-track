@@ -580,7 +580,7 @@ def preview_parse(
     from app.services.parsing_pipeline import run_parsing_pipeline
 
     result = run_parsing_pipeline(text)
-    rows = normalize_all(result.records)
+    rows = normalize_all(result.records, source_text=text)
     return StructuredRecordsOut(**build_structured_from_parsed(rows))
 
 
