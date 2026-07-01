@@ -90,6 +90,13 @@ def _extract_reference(text: str) -> str | None:
     return None
 
 
+def _normalize_reference(reference: str | None) -> str | None:
+    text = _trim(reference)
+    if not text:
+        return None
+    return _extract_reference(text)
+
+
 def _extract_asset(text: str) -> tuple[str, str] | None:
     match = _SWITCH_RE.search(text)
     if match:
@@ -123,14 +130,25 @@ def _remove_semantic_noise(text: str) -> str:
     return _trim(cleaned) or ""
 
 
+def _strip_location_edges(text: str) -> str:
+    cleaned = re.sub(r"\s+(?:на|и|а|также)$", "", text.strip(), flags=re.IGNORECASE)
+    return _trim(cleaned) or ""
+
+
+def _clean_location_name(name: str) -> str:
+    cleaned = _strip_location_edges(name)
+    cleaned = re.split(r"\s+перегон\s+", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
+    return _strip_location_edges(cleaned)
+
+
 def _extract_location(text: str, *, allow_plain_fallback: bool = False) -> str | None:
     match = _PEREGON_RE.search(text)
     if match:
-        return f"Перегон {_title_ru(match.group('name'))}"
+        return f"Перегон {_title_ru(_clean_location_name(match.group('name')))}"
 
     match = _STATION_RE.search(text)
     if match:
-        return _title_ru(match.group("name"))
+        return _title_ru(_clean_location_name(match.group("name")))
 
     if not allow_plain_fallback:
         return None
@@ -145,9 +163,18 @@ def _extract_location(text: str, *, allow_plain_fallback: bool = False) -> str |
 
 
 def _repair_location(location: str | None, pool: str, warnings: list[str]) -> str | None:
-    source = " ".join(part for part in [location, pool] if part)
-    repaired = _extract_location(source)
     original = _trim(location)
+
+    if original:
+        repaired_from_location = _extract_location(original) or _extract_location(
+            original, allow_plain_fallback=True
+        )
+        if repaired_from_location:
+            if repaired_from_location != original:
+                _append_warning(warnings, "location cleaned from forbidden tokens")
+            return repaired_from_location
+
+    repaired = _extract_location(pool)
     if repaired and repaired != original:
         _append_warning(warnings, "location repaired from mixed context")
         return repaired
@@ -169,7 +196,9 @@ def repair_railway_row(row: RailwayRow, previous: RailwayRow | None = None) -> R
     warnings = [w for w in row.warnings if w]
     pool = _text_pool(row)
 
-    reference = _trim(row.reference)
+    reference = _normalize_reference(row.reference)
+    if row.reference and not reference:
+        _append_warning(warnings, "reference cleared: not km/pk/m")
     if not reference:
         extracted = _extract_reference(pool)
         if extracted:

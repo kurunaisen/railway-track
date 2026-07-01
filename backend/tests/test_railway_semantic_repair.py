@@ -101,6 +101,41 @@ def test_repair_peregon_reference_from_words():
     assert row.reference == "1418 км, пк 2, 87 м"
 
 
+def test_repair_cleans_excel_observed_location_and_reference_leaks():
+    rows = repair_railway_rows(
+        [
+            _row(
+                location="Перегон Магнетиты - Шонгуй Перегон Магнетиты - Шонгуй",
+                reference="1418 км пикет 2, 87 м",
+                sourceText="Перегон Магнетиты - Шонгуй 1418 километр пике 2 87 метр отсутствует 1 стыковой болт",
+                defect="отсутствует 1 стыковой болт",
+            ),
+            _row(
+                location="Перегон Магнетиты - Шонгуй На",
+                reference="1418 км пикет 4, 22 м",
+                sourceText="На 1418 км пикет 4 Метр 22 отсутствует 2 закладных болта",
+                defect="отсутствует 2 закладных болта",
+            ),
+            _row(
+                location="Магнетиты На станции Магнетиты",
+                reference="2 звено",
+                sourceText="На станции Магнетиты 5 путь 2 звено не закручен 1 стыковой болт",
+                defect="не закручен 1 стыковой болт",
+            ),
+        ]
+    )
+
+    assert rows[0].location == "Перегон Магнетиты - Шонгуй"
+    assert rows[0].reference == "1418 км, пк 2, 87 м"
+    assert rows[1].location == "Перегон Магнетиты - Шонгуй"
+    assert rows[1].reference == "1418 км, пк 4, 22 м"
+    assert rows[2].location == "Магнетиты"
+    assert rows[2].reference is None
+    assert rows[2].asset_kind == "track"
+    assert rows[2].asset_number == "5"
+    assert rows[2].note == "звено 2"
+
+
 def test_extract_repairs_real_transcript_bad_llm_semantics():
     transcript = (
         "Перегон от никиты шомгу 1418 километр пике 2 87 метр отсутствует 1 стыковой болт "
