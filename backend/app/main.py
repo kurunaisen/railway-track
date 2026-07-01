@@ -169,8 +169,6 @@ def health():
 
             "OPENAI_API_KEY": _env_present("OPENAI_API_KEY"),
 
-            "OPENAI_API_KEY": _env_present("OPENAI_API_KEY"),
-
             "DATABASE_URL": _env_present("DATABASE_URL"),
 
             "STORAGE_BACKEND": _env_present("STORAGE_BACKEND"),

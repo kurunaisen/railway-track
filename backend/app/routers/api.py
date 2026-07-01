@@ -55,7 +55,6 @@ from app.services.excel_export import export_session_to_excel, export_sessions_b
 
 from app.services.inspection_repository import (
     apply_flat_update,
-    build_structured_from_parsed,
     flat_row_from_item,
     get_item_with_record,
     load_flat_rows,
@@ -565,23 +564,6 @@ def get_structured_records(
     if not job:
         return StructuredRecordsOut(records=[])
     return StructuredRecordsOut(**load_structured_records(job))
-
-
-@router.post("/parse/preview", response_model=StructuredRecordsOut)
-def preview_parse(
-    payload: dict,
-    current: CurrentUser = Depends(get_current_user),
-):
-    """Разбор текста без аудио — для проверки нескольких перегонов."""
-    text = payload.get("text", "")
-    if not text.strip():
-        raise HTTPException(status_code=400, detail="text обязателен")
-    from app.services.normalizer import normalize_all
-    from app.services.parsing_pipeline import run_parsing_pipeline
-
-    result = run_parsing_pipeline(text)
-    rows = normalize_all(result.records, source_text=text)
-    return StructuredRecordsOut(**build_structured_from_parsed(rows))
 
 
 @router.put("/records/{record_id}", response_model=TrackRecordOut)

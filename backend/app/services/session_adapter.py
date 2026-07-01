@@ -1,4 +1,4 @@
-"""Адаптер audio_files + jobs → AudioSessionOut (обратная совместимость API)."""
+"""Адаптер audio_files + jobs → AudioSessionOut."""
 
 from __future__ import annotations
 
@@ -14,21 +14,22 @@ from app.schemas import (
     JobOut,
     LogicalBlockOut,
     LogicalRecordOut,
+    RailwayRowOut,
     SessionSummaryOut,
     StructuredRecordsOut,
-    RailwayRowOut,
     TrackRecordOut,
     TranscriptSegmentOut,
-    WideTableOut,
 )
-from app.services.inspection_repository import load_structured_records
-from app.services.transcript_crypto import decrypt_transcript_text
-from app.services.inspection_repository import FlatInspectionRow, load_active_job, load_flat_rows, load_latest_done_job
-from app.services.inspection_form import build_form_rows
-from app.services.parser import ParsedRecord
-from app.services.switch_context import propagate_switch_context
+from app.services.inspection_repository import (
+    FlatInspectionRow,
+    load_active_job,
+    load_flat_rows,
+    load_latest_done_job,
+    load_structured_records,
+)
 from app.services.pipeline_issues import normalize_pipeline_issues
-from app.services.wide_table import build_wide_rows
+from app.services.railway.process_pipeline import railway_rows_from_job
+from app.services.transcript_crypto import decrypt_transcript_text
 
 logger = logging.getLogger(__name__)
 
@@ -44,31 +45,6 @@ def _derive_status(audio: AudioFile, active: ProcessingJob | None, done: Process
             return "saved"
         return "processed"
     return "uploaded"
-
-
-def _enrich_switch_from_transcript(
-    rows: list[FlatInspectionRow],
-    full_transcript: str | None,
-) -> None:
-    """Старые записи без switch_number в БД — восстановить из ASR."""
-    if not full_transcript or not rows or all(r.switch for r in rows):
-        return
-    tmp = [
-        ParsedRecord(
-            logical_record_index=r.logical_record_index,
-            put=r.put,
-            switch=r.switch,
-        )
-        for r in rows
-    ]
-    propagate_switch_context(tmp, full_transcript)
-    by_idx = {t.logical_record_index: t for t in tmp}
-    for row in rows:
-        if row.switch:
-            continue
-        src = by_idx.get(row.logical_record_index)
-        if src and src.switch:
-            row.switch = src.switch
 
 
 def _flat_to_track_out(row: FlatInspectionRow) -> TrackRecordOut:
@@ -151,10 +127,15 @@ def _api_job_status(status: str) -> str:
     }.get(status, status)
 
 
+def _railway_rows_out(job: ProcessingJob | None) -> list[RailwayRowOut]:
+    if not job:
+        return []
+    return [RailwayRowOut.model_validate(row.to_api_dict()) for row in railway_rows_from_job(job)]
+
+
 def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
     active = load_active_job(db, audio.id)
     done = load_latest_done_job(db, audio.id)
-    job = active or done
 
     rows: list[FlatInspectionRow] = []
     full_transcript: str | None = None
@@ -173,7 +154,6 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
             full_transcript = decrypt_transcript_text(
                 done.transcript.full_text, done.transcript.text_encrypted
             )
-            _enrich_switch_from_transcript(rows, full_transcript)
             asr_avg = done.transcript.confidence_avg
             segments = [
                 TranscriptSegmentOut(
@@ -199,9 +179,7 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
             for t in done.unknown_terms
         ]
 
-    flat_for_wide = rows
-    cols, wide_rows = build_wide_rows(flat_for_wide)
-    form_cols, form_rows = build_form_rows(flat_for_wide)
+    railway_rows = _railway_rows_out(done)
 
     structured = None
     if done and done.inspection_records:
@@ -210,14 +188,7 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
         except ValidationError as exc:
             logger.warning("Skip invalid structured records for job %s: %s", done.id, exc)
 
-    railway_rows: list[RailwayRowOut] = []
-    if done:
-        meta = done.get_pipeline_metadata() or {}
-        for raw in meta.get("railway_rows", []):
-            try:
-                railway_rows.append(RailwayRowOut.model_validate(raw))
-            except ValidationError as exc:
-                logger.warning("Skip invalid railway row in job %s: %s", done.id, exc)
+    logical_records = _build_logical_records(rows)
 
     return AudioSessionOut(
         id=audio.id,
@@ -232,27 +203,21 @@ def audio_file_to_session_out(db: Session, audio: AudioFile) -> AudioSessionOut:
         records=[_flat_to_track_out(r) for r in rows],
         transcript_segments=segments,
         logical_blocks=logical_blocks,
-        logical_records=_build_logical_records(rows),
+        logical_records=logical_records,
         unknown_terms=unknown_terms,
         parse_errors=parse_errors,
         validation_warnings=validation_warnings,
         file_metadata=file_metadata,
-        records_wide=WideTableOut(columns=cols, rows=wide_rows) if wide_rows else None,
-        records_form=WideTableOut(columns=form_cols, rows=form_rows) if form_rows else None,
+        records_wide=None,
+        records_form=None,
         active_job=_job_to_out(active) if active else None,
         logical_blocks_count=len(logical_blocks),
         records_count=len(rows),
-        logical_records_count=len(_build_logical_records(rows)),
-        positions_count=len(rows),
+        logical_records_count=len(logical_records),
+        positions_count=len(railway_rows),
         structured_records=structured,
         railway_rows=railway_rows,
     )
-
-
-def _count_positions(job: ProcessingJob | None) -> int:
-    if not job:
-        return 0
-    return sum(len(rec.items) for rec in job.inspection_records)
 
 
 def _export_stats(db: Session, audio_file_id: int) -> tuple[int, datetime | None]:
@@ -278,7 +243,7 @@ def audio_file_to_summary(db: Session, audio: AudioFile) -> SessionSummaryOut:
     if done:
         meta = done.get_pipeline_metadata()
         confirmed = bool(meta.get("confirmed"))
-        positions_count = _count_positions(done)
+        positions_count = len(railway_rows_from_job(done))
     export_count, last_export_at = _export_stats(db, audio.id)
     return SessionSummaryOut(
         id=audio.id,
