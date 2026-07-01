@@ -29,6 +29,7 @@ class ParsedRecord:
     uchastok: str | None = None
     peregon: str | None = None
     put: str | None = None
+    switch: str | None = None
     km: str | None = None
     piket: str | None = None
     obekt: str | None = None
@@ -181,6 +182,17 @@ def _extract_put(text: str) -> str | None:
 
         return normalize_put(m.group(1))
     return None
+
+
+_SWITCH_EXPLICIT_RE = re.compile(
+    r"стрелочн(?:ый|ого|ом|ая)?\s+перевод(?:а|е|у|ом)?\s*(?:№|номер|n\.?)?\s*(\d+)",
+    re.IGNORECASE,
+)
+
+
+def _extract_switch(text: str) -> str | None:
+    m = _SWITCH_EXPLICIT_RE.search(text)
+    return m.group(1) if m else None
 
 
 def _extract_km(text: str) -> str | None:
@@ -441,6 +453,7 @@ def parse_chunk(text: str, start: float | None = None, end: float | None = None)
         record.uchastok = extract_single_location(record.peregon) or record.uchastok
         record.peregon = None
     record.put = _extract_put(normalized)
+    record.switch = _extract_switch(normalized)
     record.km = _extract_km(normalized)
     record.piket = _extract_piket(normalized)
     record.obekt = _extract_obekt(normalized)

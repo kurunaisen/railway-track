@@ -27,6 +27,7 @@ from app.services.parser import (
     _extract_peregon,
     _extract_piket,
     _extract_put,
+    _extract_switch,
     _extract_speed_limit,
     _extract_uchastok,
     _extract_zveno,
@@ -101,7 +102,8 @@ _BINDING_PIKET_RE = re.compile(
     r"(?:^|\s)(?:на\s+)?пикет\s*\d+",
     re.IGNORECASE,
 )
-_STATION_BLOCK_RE = re.compile(r"\bна\s+станци[яи]\s+", re.IGNORECASE)
+_PATH_BINDING_RE = re.compile(r"(?:^|\s)(\d+\s+путь\b)", re.IGNORECASE)
+_STATION_BLOCK_RE = re.compile(r"(?:^|\b)(?:на\s+)?станци[яи]\s+", re.IGNORECASE)
 
 
 @dataclass
@@ -113,6 +115,7 @@ class LogicalRecordContext:
     uchastok: str | None = None
     peregon: str | None = None
     put: str | None = None
+    switch: str | None = None
     km: str | None = None
     piket: str | None = None
     obekt: str | None = None
@@ -144,7 +147,14 @@ def _is_new_haul_block(text: str) -> bool:
 
 
 def _is_station_block(text: str) -> bool:
-    return bool(_STATION_BLOCK_RE.search(_normalize_text(text)))
+    normalized = _normalize_text(text)
+    if not _STATION_BLOCK_RE.search(normalized):
+        return False
+    if re.search(r"\bперегон\s+(?:станци[яи]\s+)?", normalized, re.IGNORECASE):
+        return False
+    if re.search(r"станци[яи]\s+\S+\s+[-–—]", normalized, re.IGNORECASE):
+        return False
+    return True
 
 
 def _location_only_fragment(text: str) -> bool:
@@ -191,6 +201,10 @@ def _binding_split_points(normalized: str) -> list[int]:
         if match.start() > 0:
             points.append(match.start())
 
+    for i, match in enumerate(_PATH_BINDING_RE.finditer(normalized)):
+        if i > 0:
+            points.append(match.start())
+
     return sorted(set(points))
 
 
@@ -207,6 +221,17 @@ def _inherit_location_fields(
         if station:
             ctx.uchastok = station
         location = ()
+    elif re.search(r"\d+\s+путь\b", _normalize_text(loc_text)):
+        normalized = _normalize_text(loc_text)
+        ctx.put = _extract_put(normalized)
+        ctx.switch = _extract_switch(normalized)
+        if inherited.station_active:
+            ctx.peregon = None
+            ctx.km = None
+            ctx.piket = None
+            if inherited.uchastok:
+                ctx.uchastok = inherited.uchastok
+        return
     elif inherited.station_active and not _is_new_haul_block(loc_text):
         ctx.peregon = None
         ctx.km = None
@@ -215,6 +240,8 @@ def _inherit_location_fields(
             ctx.uchastok = inherited.uchastok
         if not ctx.put and inherited.put:
             ctx.put = inherited.put
+        if not ctx.switch and inherited.switch:
+            ctx.switch = inherited.switch
         for field in always:
             if not getattr(ctx, field) and getattr(inherited, field):
                 setattr(ctx, field, getattr(inherited, field))
@@ -269,6 +296,7 @@ def extract_logical_record_context(
         uchastok=uchastok,
         peregon=peregon,
         put=_extract_put(normalized),
+        switch=_extract_switch(normalized),
         km=_extract_km(normalized),
         piket=_extract_piket(normalized),
         comment=comment,
@@ -508,6 +536,7 @@ def position_to_row(ctx: LogicalRecordContext, pos: PositionItem) -> ParsedRecor
         uchastok=ctx.uchastok,
         peregon=ctx.peregon,
         put=ctx.put,
+        switch=ctx.switch,
         km=ctx.km,
         piket=ctx.piket,
         comment=merge_comment(ctx.comment, side_note) if side_note else ctx.comment,
@@ -587,7 +616,7 @@ def expand_blocks_to_canonical_rows(blocks: list[LogicalBlock]) -> list[ParsedRe
                 pos = parse_position(frag, pos_idx)
                 rows.append(position_to_row(ctx, pos))
 
-            for field in ("record_date", "uchastok", "peregon", "put", "km", "piket", "comment"):
+            for field in ("record_date", "uchastok", "peregon", "put", "switch", "km", "piket", "comment"):
                 val = getattr(ctx, field)
                 if val:
                     setattr(inherited, field, val)
@@ -630,6 +659,7 @@ def enforce_single_position_per_row(rows: list[ParsedRecord]) -> list[ParsedReco
             uchastok=row.uchastok,
             peregon=row.peregon,
             put=row.put,
+            switch=row.switch,
             km=row.km,
             piket=row.piket,
             obekt=row.obekt,

@@ -135,6 +135,9 @@ _SWITCH_KEYWORDS = (
     "перевод",
     "крестовин",
     "остряк",
+    "сердечник",
+    "хвост",
+    "усовик",
 )
 
 
@@ -207,6 +210,17 @@ class GaugeEvaluation:
 
 def evaluate_gauge_width(width: float, text: str) -> GaugeEvaluation:
     profile = select_gauge_profile(text)
+
+    # 2288р табл. 2.4: допуск содержания 1512–1524 мм — без V огр. (в т.ч. хвост крестовины).
+    if GAUGE_TRACK_1520.min_normal_mm <= width <= GAUGE_TRACK_1520.max_normal_mm:
+        return GaugeEvaluation(
+            profile=profile,
+            width_mm=width,
+            defect_title=None,
+            band=None,
+            within_tolerance=True,
+            degree=DeviationDegree.WITHIN,
+        )
 
     if width >= profile.absolute_max_mm:
         return GaugeEvaluation(

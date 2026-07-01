@@ -24,6 +24,7 @@ class FormRowSource(Protocol):
     peregon: str | None
     uchastok: str | None
     put: str | None
+    switch: str | None = None
     obekt: str | None
     km: str | None
     piket: str | None
@@ -122,7 +123,7 @@ def resolve_track_parts(rec: FormRowSource) -> tuple[str | None, str | None, str
     """
     sources = (rec.raw_text, rec.comment)
     path_num = _explicit_path_number(*sources)
-    switch_num = _explicit_switch_number(*sources)
+    switch_num = _explicit_switch_number(*sources) or ((getattr(rec, "switch", None) or "").strip() or None)
     put = (rec.put or "").strip()
 
     path_display: str | None = None

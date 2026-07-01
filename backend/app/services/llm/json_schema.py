@@ -16,6 +16,7 @@ from app.services.speed_limit import apply_speed_limit_fields
 from app.services.peregons import peregon_names_for_prompt
 from app.services.stations import station_names_for_prompt
 from app.services.norms_for_llm import build_norms_summary_for_llm
+from app.services.switch_terminology import build_switch_glossary_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,13 @@ _LLM_SYSTEM_RULES_BASE = """Роль: текст → структура. НЕ ф
 
 def build_llm_system_rules() -> str:
     """System prompt с актуальными нормами из gauge_norms / track_norms."""
-    return _LLM_SYSTEM_RULES_BASE + "\n" + build_norms_summary_for_llm()
+    return (
+        _LLM_SYSTEM_RULES_BASE
+        + "\n"
+        + build_norms_summary_for_llm()
+        + "\n\n"
+        + build_switch_glossary_for_llm()
+    )
 
 
 LLM_SYSTEM_RULES = build_llm_system_rules()

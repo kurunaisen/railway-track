@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from app.services.km_parse import merge_hesitated_km_value
-from app.services.parser import ParsedRecord
+from app.services.parser import ParsedRecord, _extract_switch, _normalize_text
 from app.services.speed_limit import reconcile_speed_limit_rows, drop_orphan_speed_rows
 from app.services.rail_side import (
     extract_rail_side,
@@ -193,6 +193,8 @@ def normalize_record(record: ParsedRecord) -> ParsedRecord:
         if record.put and station in CANONICAL_STATIONS:
             record.peregon = None
     record.put = normalize_put(record.put)
+    if not record.switch and record.raw_text:
+        record.switch = _extract_switch(_normalize_text(record.raw_text))
     record.km = normalize_km(record.km)
     if record.uchastok and not record.peregon:
         cleared_km, was_cleared = sanitize_station_km(record.km, record.uchastok)

@@ -137,12 +137,27 @@ def test_gauge_closed_above_1548():
     assert "закрывается" in (rec.comment or "")
 
 
-def test_gauge_switch_tighter_tolerance():
+def test_gauge_switch_1524_within_content_tolerance():
+    """2288р табл. 2.4: 1524 мм — верхняя граница допуска, без V огр. даже у крестовины."""
     from app.services.gauge_norms import evaluate_gauge_width
 
-    evaluation = evaluate_gauge_width(1524, "стрелочный перевод уширение колеи")
+    evaluation = evaluate_gauge_width(1524, "стрелочный перевод ширина колеи в хвосте крестовины")
+    assert evaluation.within_tolerance
+    rec = ParsedRecord(
+        defect="ширина рельсовой колеи",
+        value="1524",
+        unit="мм",
+        raw_text="ширина колеи в хвосте крестовины 1524",
+    )
+    apply_track_norms(rec)
+    assert rec.speed_limit is None
+
+
+def test_gauge_switch_1525_over_switch_tolerance():
+    from app.services.gauge_norms import evaluate_gauge_width
+
+    evaluation = evaluate_gauge_width(1525, "стрелочный перевод уширение колеи")
     assert not evaluation.within_tolerance
-    assert evaluation.defect_title == "уширение рельсовой колеи"
 
 
 def test_gauge_from_walk_transcript():

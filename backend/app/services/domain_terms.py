@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from app.services.peregons import CANONICAL_PEREGONS, peregon_names_for_prompt
 from app.services.stations import CANONICAL_LOCATIONS, station_names_for_prompt
+from app.services.switch_terminology import (
+    SWITCH_ELEMENT_TERMS,
+    SWITCH_INFLECTIONS,
+    switch_terms_for_dictionary,
+)
 
 RAILWAY_INITIAL_PROMPT = (
     "Обход пути. Перегон, станция, блокпост, остановочный пункт, участок, путь, главный, километр, пикет, "
-    "рельс, рельсовой, шпала, стык, стрелочный перевод, колея, ширина колеи, уровень, износ, просадка, "
+    "рельс, рельсовой, шпала, стык, стрелочный перевод, остряк, крестовина, сердечник, усовик, "
+    "хвост крестовины, рамный рельс, контррельс, колея, ширина колеи, уровень, износ, просадка, "
     "трещина, уширение, сужение, отслоение, выбоина, балласт, уклон, кривая, неисправность, дефект, "
     "ограничение скорости, километр в час, миллиметр, пикетаж, объект, "
     "стрелочная гарнитура, бесстыковой путь, температурный зазор. "
@@ -30,6 +36,12 @@ OBJECT_KEYWORDS = [
     "балласт",
     "платформа",
     "стрелочная гарнитура",
+    "крестовина",
+    "сердечник",
+    "усовик",
+    "остряк",
+    "рамный рельс",
+    "контррельс",
     "объект",
 ]
 
@@ -53,6 +65,8 @@ PARAMETER_KEYWORDS = [
 # Неисправности / дефекты
 DEFECT_KEYWORDS = [
     "износ",
+    "износ сердечника",
+    "износ крестовины",
     "просадка",
     "трещина",
     "уширение",
@@ -211,6 +225,7 @@ DOMAIN_INFLECTIONS: set[str] = {
     "перегона",
     "станции",
 }
+DOMAIN_INFLECTIONS.update(SWITCH_INFLECTIONS)
 
 
 def _normalize_token(token: str) -> str:
@@ -234,7 +249,8 @@ def _build_known_terms() -> set[str]:
     terms = set(KNOWN_TERMS_BASE)
     terms.update(DOMAIN_INFLECTIONS)
     terms.update(_location_tokens())
-    for phrase in (*OBJECT_KEYWORDS, *PARAMETER_KEYWORDS, *DEFECT_KEYWORDS):
+    terms.update(switch_terms_for_dictionary())
+    for phrase in (*OBJECT_KEYWORDS, *PARAMETER_KEYWORDS, *DEFECT_KEYWORDS, *SWITCH_ELEMENT_TERMS):
         terms.add(_normalize_token(phrase))
         terms.update(_tokens_from_phrase(phrase))
     return terms
