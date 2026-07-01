@@ -15,6 +15,7 @@ from app.services.parse_railway_narrative import (
     parse_railway_narrative_to_records,
     prefer_narrative_parser,
 )
+from app.services.record_expander import ensure_minimum_rows, expand_blocks_to_rows
 from app.services.railway_segment import segment_railway_text
 from app.services.segmentation import LogicalBlock, segment_logical_blocks
 
