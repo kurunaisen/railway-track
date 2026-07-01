@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AudioSession } from "./api";
 import {
   PIPELINE_STEPS,
@@ -20,6 +20,12 @@ import { healthUrl } from "./config";
 import Login from "./Login";
 import { APP_BRAND_ACCENT, APP_BRAND_MAIN, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
 import { FORM_COLUMNS, toDisplayRows } from "./railway/display";
+import {
+  analyzeTranscriptQuality,
+  buildTranscriptQualitySegments,
+  type TranscriptIssue,
+  type TranscriptQualitySegment,
+} from "./railway/transcriptQuality";
 import { AccountPanel } from "./profile/AccountPanel";
 import { ProfileAvatar } from "./profile/ProfileAvatar";
 
@@ -92,6 +98,62 @@ function AppFooter() {
         </p>
       </div>
     </footer>
+  );
+}
+
+function TranscriptQualityPreview({
+  issues,
+  segments,
+}: {
+  issues: TranscriptIssue[];
+  segments: TranscriptQualitySegment[];
+}) {
+  if (segments.length === 1 && !segments[0].issue && !segments[0].text.trim()) return null;
+
+  const errorCount = issues.filter((issue) => issue.severity === "error").length;
+  const warningCount = issues.length - errorCount;
+
+  return (
+    <div className="transcript-quality" aria-live="polite">
+      <div className="transcript-quality-head">
+        <strong>Проверка текста</strong>
+        {issues.length > 0 ? (
+          <span className="hint">
+            {errorCount > 0 ? `красных: ${errorCount}` : ""}
+            {errorCount > 0 && warningCount > 0 ? ", " : ""}
+            {warningCount > 0 ? `жёлтых: ${warningCount}` : ""}
+          </span>
+        ) : (
+          <span className="hint">подозрительных фрагментов не найдено</span>
+        )}
+      </div>
+      <div className="transcript-quality-text" aria-label="Текст с подсветкой подозрительных фрагментов">
+        {segments.map((segment, index) =>
+          segment.issue ? (
+            <mark
+              key={`${segment.issue.id}-${index}`}
+              className={`transcript-mark transcript-mark-${segment.issue.severity}`}
+              title={`${segment.issue.title}: ${segment.issue.description}`}
+            >
+              {segment.text}
+            </mark>
+          ) : (
+            <span key={`plain-${index}`}>{segment.text}</span>
+          ),
+        )}
+      </div>
+      {issues.length > 0 && (
+        <ul className="transcript-quality-list">
+          {issues.slice(0, 8).map((issue) => (
+            <li key={issue.id} className={`transcript-quality-item ${issue.severity}`}>
+              <strong>{issue.title}</strong>
+              <span>{issue.description}</span>
+            </li>
+          ))}
+          {issues.length > 8 && <li className="hint">Ещё предупреждений: {issues.length - 8}</li>}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -427,6 +489,14 @@ export default function App() {
   const displayRows = toDisplayRows(railwayRows);
   const warningCount = railwayRows.reduce((n, row) => n + (row.warnings?.length ?? 0), 0);
   const hasTranscript = Boolean(transcriptDraft.trim());
+  const transcriptQualityIssues = useMemo(
+    () => analyzeTranscriptQuality(transcriptDraft),
+    [transcriptDraft],
+  );
+  const transcriptQualitySegments = useMemo(
+    () => buildTranscriptQualitySegments(transcriptDraft, transcriptQualityIssues),
+    [transcriptDraft, transcriptQualityIssues],
+  );
 
   const pendingUploadCount = uploadBatch.filter((s) => s.status === "uploaded").length;
 
@@ -557,6 +627,10 @@ export default function App() {
               value={transcriptDraft}
               onChange={(e) => setTranscriptDraft(e.target.value)}
               disabled={loading}
+            />
+            <TranscriptQualityPreview
+              issues={transcriptQualityIssues}
+              segments={transcriptQualitySegments}
             />
             <div className="upload-actions" style={{ marginTop: 12 }}>
               <button

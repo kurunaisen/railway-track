@@ -1,0 +1,149 @@
+export type TranscriptIssueSeverity = "warning" | "error";
+
+export interface TranscriptIssue {
+  id: string;
+  start: number;
+  end: number;
+  severity: TranscriptIssueSeverity;
+  title: string;
+  description: string;
+}
+
+export interface TranscriptQualitySegment {
+  text: string;
+  issue?: TranscriptIssue;
+}
+
+type DraftIssue = Omit<TranscriptIssue, "id">;
+
+const TRACK_GAUGE_MIN_MM = 1510;
+const TRACK_GAUGE_MAX_MM = 1560;
+
+function addIssue(issues: DraftIssue[], issue: DraftIssue): void {
+  if (issue.start < 0 || issue.end <= issue.start) return;
+  issues.push(issue);
+}
+
+function isPlausibleGauge(value: number): boolean {
+  return value >= TRACK_GAUGE_MIN_MM && value <= TRACK_GAUGE_MAX_MM;
+}
+
+function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
+  const gaugeRe =
+    /\b(?:уширение|ширина)\s+колеи(?<middle>[\s\p{L},.-]{0,30}?)(?<first>\d{3,4})\s+(?<second>\d{3,4})\s*мм\b/giu;
+
+  for (const match of text.matchAll(gaugeRe)) {
+    const first = Number(match.groups?.first);
+    const second = Number(match.groups?.second);
+    const firstText = match.groups?.first ?? "";
+    const secondText = match.groups?.second ?? "";
+    const base = match.index ?? 0;
+    const firstStart = base + match[0].indexOf(firstText);
+    const secondStart = base + match[0].lastIndexOf(secondText);
+
+    if (!Number.isFinite(first) || !Number.isFinite(second)) continue;
+
+    if (!isPlausibleGauge(first) && isPlausibleGauge(second)) {
+      addIssue(issues, {
+        start: firstStart,
+        end: firstStart + firstText.length,
+        severity: "error",
+        title: "Подозрительное число перед измерением колеи",
+        description: `Перед "${second} мм" найдено лишнее или ошибочное число "${first}". Проверьте transcript вручную.`,
+      });
+      continue;
+    }
+
+    addIssue(issues, {
+      start: firstStart,
+      end: secondStart + secondText.length,
+      severity: "warning",
+      title: "Два числа перед \"мм\"",
+      description: "В измерении колеи найдено два числа подряд. Возможно, ASR добавил лишнее число.",
+    });
+  }
+}
+
+function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
+  const patterns: Array<[RegExp, TranscriptIssueSeverity, string, string]> = [
+    [
+      /\bпике\b/giu,
+      "warning",
+      "Похоже на неполное слово",
+      "Возможно, имелось в виду \"пикет\". Проверьте привязку.",
+    ],
+    [
+      /\bшомгу\b/giu,
+      "error",
+      "Подозрительное название",
+      "Слово похоже на ASR-искажение названия. Проверьте станцию или перегон.",
+    ],
+    [
+      /\bмагнититы\b/giu,
+      "warning",
+      "Проверьте название станции",
+      "Возможно, ASR распознал \"Магнетиты\" как \"магнититы\".",
+    ],
+    [
+      /\b(?:км|километр)\s*(?:пикет|пк)\b/giu,
+      "warning",
+      "Неполная привязка",
+      "После километра не найден номер км. Проверьте привязку км/пк/м.",
+    ],
+  ];
+
+  for (const [pattern, severity, title, description] of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      addIssue(issues, {
+        start: match.index ?? 0,
+        end: (match.index ?? 0) + match[0].length,
+        severity,
+        title,
+        description,
+      });
+    }
+  }
+}
+
+function finalizeIssues(issues: DraftIssue[]): TranscriptIssue[] {
+  const sorted = [...issues].sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    return b.end - a.end;
+  });
+  const result: TranscriptIssue[] = [];
+  let cursor = -1;
+  for (const issue of sorted) {
+    if (issue.start < cursor) continue;
+    result.push({ ...issue, id: `${issue.severity}-${issue.start}-${issue.end}` });
+    cursor = issue.end;
+  }
+  return result;
+}
+
+export function analyzeTranscriptQuality(text: string): TranscriptIssue[] {
+  const issues: DraftIssue[] = [];
+  collectGaugeIssues(text, issues);
+  collectRailwayTermIssues(text, issues);
+  return finalizeIssues(issues);
+}
+
+export function buildTranscriptQualitySegments(
+  text: string,
+  issues: TranscriptIssue[],
+): TranscriptQualitySegment[] {
+  if (!issues.length) return [{ text }];
+
+  const segments: TranscriptQualitySegment[] = [];
+  let cursor = 0;
+  for (const issue of issues) {
+    if (issue.start > cursor) {
+      segments.push({ text: text.slice(cursor, issue.start) });
+    }
+    segments.push({ text: text.slice(issue.start, issue.end), issue });
+    cursor = issue.end;
+  }
+  if (cursor < text.length) {
+    segments.push({ text: text.slice(cursor) });
+  }
+  return segments;
+}
