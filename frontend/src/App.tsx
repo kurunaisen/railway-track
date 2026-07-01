@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { AudioSession } from "./api";
 import {
-  PIPELINE_STEPS,
   canEdit,
   confirmSession,
   exportRailwayRowsXlsx,
   extractRailwayRows,
-  formatTime,
   getJob,
   getSession,
-  isAdmin,
   processSession,
-  reviewTranscriptWithAi,
   saveSession,
   uploadAudio,
   type RailwayRow,
@@ -25,7 +21,6 @@ import {
   applyTranscriptSafeFixes,
   analyzeTranscriptQuality,
   buildTranscriptQualitySegments,
-  mergeTranscriptIssues,
   type TranscriptIssue,
   type TranscriptQualitySegment,
 } from "./railway/transcriptQuality";
@@ -115,14 +110,10 @@ function TranscriptQualityPreview({
   issues,
   segments,
   onApplySafeFixes,
-  onAiReview,
-  aiReviewLoading,
 }: {
   issues: TranscriptIssue[];
   segments: TranscriptQualitySegment[];
   onApplySafeFixes: () => void;
-  onAiReview: () => void;
-  aiReviewLoading: boolean;
 }) {
   if (segments.length === 1 && !segments[0].issue && !segments[0].text.trim()) return null;
 
@@ -154,12 +145,6 @@ function TranscriptQualityPreview({
           <span className="hint">Удаляются только очевидные лишние числа перед корректной шириной колеи.</span>
         </div>
       )}
-      <div className="transcript-quality-actions">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onAiReview} disabled={aiReviewLoading}>
-          {aiReviewLoading ? "AI проверяет…" : "Проверить текст AI"}
-        </button>
-        <span className="hint">Дополнительная проверка через backend, без автоправок.</span>
-      </div>
       <div className="transcript-quality-text" aria-label="Текст с подсветкой подозрительных фрагментов">
         {segments.map((segment, index) =>
           segment.issue ? (
@@ -223,8 +208,6 @@ export default function App() {
   const [recording, setRecording] = useState(false);
   const [saved, setSaved] = useState(false);
   const [transcriptDraft, setTranscriptDraft] = useState("");
-  const [aiTranscriptIssues, setAiTranscriptIssues] = useState<TranscriptIssue[]>([]);
-  const [aiReviewLoading, setAiReviewLoading] = useState(false);
   const [railwayRows, setRailwayRows] = useState<RailwayRow[]>([]);
   const [accountOpen, setAccountOpen] = useState(false);
   const [uploadBatch, setUploadBatch] = useState<AudioSession[]>([]);
@@ -233,7 +216,6 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([]);
 
   const editable = user ? canEdit(user.role) : false;
-  const adminView = user ? isAdmin(user.role) : false;
 
   useEffect(() => {
     let cancelled = false;
@@ -280,7 +262,6 @@ export default function App() {
     if (!editable || files.length === 0) return;
     setError(null);
     setSaved(false);
-    setAiTranscriptIssues([]);
     setTranscriptDraft("");
     setRailwayRows([]);
     setLoading(true);
@@ -334,7 +315,6 @@ export default function App() {
       setSession(processed);
       setUploadBatch((prev) => upsertBatchSession(prev, processed));
       if (syncTranscript && processed.full_transcript) {
-        setAiTranscriptIssues([]);
         setTranscriptDraft(processed.full_transcript);
       }
       return processed;
@@ -369,7 +349,6 @@ export default function App() {
       const refreshed = await Promise.all(uploadBatch.map((s) => getSession(s.id)));
       setUploadBatch(refreshed);
       setSession(refreshed[refreshed.length - 1] ?? null);
-      setAiTranscriptIssues([]);
       setTranscriptDraft(combineSessionTranscripts(refreshed));
       setRailwayRows([]);
     } catch {
@@ -467,7 +446,6 @@ export default function App() {
       const loaded = await getSession(sessionId);
       setSession(loaded);
       setUploadBatch((prev) => upsertBatchSession(prev, loaded));
-      setAiTranscriptIssues([]);
       setTranscriptDraft(loaded.full_transcript ?? "");
       setRailwayRows(loaded.railway_rows ?? []);
       setSaved(false);
@@ -480,7 +458,6 @@ export default function App() {
 
   const handleSelectBatchSession = (item: AudioSession) => {
     setSession(item);
-    setAiTranscriptIssues([]);
     setTranscriptDraft(item.full_transcript ?? "");
     setRailwayRows(item.railway_rows ?? []);
   };
@@ -499,27 +476,11 @@ export default function App() {
   };
 
   const handleApplyTranscriptSafeFixes = () => {
-    setAiTranscriptIssues([]);
     setTranscriptDraft((current) => applyTranscriptSafeFixes(current, analyzeTranscriptQuality(current)));
   };
 
   const handleTranscriptChange = (value: string) => {
-    setAiTranscriptIssues([]);
     setTranscriptDraft(value);
-  };
-
-  const handleAiTranscriptReview = async () => {
-    if (!transcriptDraft.trim()) return;
-    setAiReviewLoading(true);
-    setError(null);
-    try {
-      const issues = await reviewTranscriptWithAi(transcriptDraft);
-      setAiTranscriptIssues(issues);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "AI-проверка текста недоступна");
-    } finally {
-      setAiReviewLoading(false);
-    }
   };
 
   if (authRequired === null) {
@@ -562,13 +523,8 @@ export default function App() {
   }
 
   const displayRows = toDisplayRows(railwayRows);
-  const warningCount = railwayRows.reduce((n, row) => n + (row.warnings?.length ?? 0), 0);
   const hasTranscript = Boolean(transcriptDraft.trim());
-  const localTranscriptQualityIssues = analyzeTranscriptQuality(transcriptDraft);
-  const transcriptQualityIssues = mergeTranscriptIssues(
-    localTranscriptQualityIssues,
-    aiTranscriptIssues,
-  );
+  const transcriptQualityIssues = analyzeTranscriptQuality(transcriptDraft);
   const transcriptQualitySegments = buildTranscriptQualitySegments(
     transcriptDraft,
     transcriptQualityIssues,
@@ -680,14 +636,14 @@ export default function App() {
                 ))}
               </ul>
             )}
-            {session && <SessionMeta session={session} disputedCount={warningCount} />}
+            {session && <SessionMeta session={session} disputedCount={0} />}
             {error && <div className="error">{error}</div>}
           </section>
         )}
 
         {!editable && session && (
           <section className="panel carbon-panel upload-panel">
-            <SessionMeta session={session} disputedCount={warningCount} />
+            <SessionMeta session={session} disputedCount={0} />
           </section>
         )}
 
@@ -708,8 +664,6 @@ export default function App() {
               issues={transcriptQualityIssues}
               segments={transcriptQualitySegments}
               onApplySafeFixes={handleApplyTranscriptSafeFixes}
-              onAiReview={handleAiTranscriptReview}
-              aiReviewLoading={aiReviewLoading}
             />
             <div className="upload-actions" style={{ marginTop: 12 }}>
               <button
@@ -721,70 +675,6 @@ export default function App() {
                 {loading ? "Формирование…" : "Сформировать таблицу"}
               </button>
             </div>
-          </section>
-        )}
-
-        {adminView && session?.full_transcript && (
-          <section className="panel carbon-panel transcript-panel">
-            <h2>Yandex SpeechKit — сегменты</h2>
-            {session.asr_avg_confidence != null && (
-              <p className="hint">Средняя уверенность ASR: {(session.asr_avg_confidence * 100).toFixed(0)}%</p>
-            )}
-            {session.active_job && session.active_job.status === "running" && (
-              <p className="hint pipeline-step">
-                Конвейер: шаг {session.active_job.current_step} — {PIPELINE_STEPS[session.active_job.current_step - 1]}
-              </p>
-            )}
-            <p className="transcript">{session.full_transcript}</p>
-            {session.transcript_segments.length > 0 && (
-              <details className="segments-details" open>
-                <summary>ASR-сегменты ({session.transcript_segments.length})</summary>
-                <ul className="segments-list">
-                  {session.transcript_segments.map((seg, i) => (
-                    <li key={i}>
-                      <span className="seg-time">
-                        {formatTime(seg.start)} — {formatTime(seg.end)}
-                        {seg.confidence != null && (
-                          <span className="conf"> {(seg.confidence * 100).toFixed(0)}%</span>
-                        )}
-                      </span>
-                      {seg.text}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-            {session.logical_records.length > 0 && (
-              <details className="segments-details">
-                <summary>Логические записи ({session.logical_records.length})</summary>
-                <ul className="segments-list">
-                  {session.logical_records.map((lr) => (
-                    <li key={lr.index}>
-                      <span className="seg-time">#{lr.index + 1}</span>
-                      {[lr.peregon, lr.put && `путь ${lr.put}`, lr.km && `км ${lr.km}`, lr.piket && `пикет ${lr.piket}`]
-                        .filter(Boolean)
-                        .join(", ") || "—"}
-                      {lr.positions_count > 1 && (
-                        <span className="conf"> · {lr.positions_count} поз.</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-            {session.logical_blocks.length > 0 && (
-              <details className="segments-details">
-                <summary>Логические блоки ({session.logical_blocks.length})</summary>
-                <ul className="segments-list">
-                  {session.logical_blocks.map((b) => (
-                    <li key={b.index}>
-                      <span className="seg-time">{b.trigger ?? "—"}</span>
-                      {b.text}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
           </section>
         )}
 
@@ -833,21 +723,6 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-          </section>
-        )}
-
-        {warningCount > 0 && (
-          <section className="panel carbon-panel meta-panel">
-            <h2>Предупреждения LLM</h2>
-            <ul>
-              {railwayRows.flatMap((row, index) =>
-                (row.warnings ?? []).map((warning, wi) => (
-                  <li key={`${index}-${wi}`}>
-                    <strong>Строка {index + 1}:</strong> {warning}
-                  </li>
-                ))
-              )}
-            </ul>
           </section>
         )}
 

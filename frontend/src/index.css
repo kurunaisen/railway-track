@@ -687,12 +687,14 @@ body {
 
 .transcript-quality-text {
   padding: 0.9rem;
-  max-height: 170px;
+  min-height: 130px;
+  max-height: min(42vh, 420px);
   overflow-y: auto;
   white-space: pre-wrap;
   color: rgba(226, 230, 238, 0.82);
-  font-size: 0.86rem;
-  line-height: 1.75;
+  font-size: 0.9rem;
+  line-height: 1.85;
+  scrollbar-gutter: stable;
 }
 
 .transcript-mark {

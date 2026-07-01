@@ -34,6 +34,20 @@ function isPlausibleGauge(value: number): boolean {
   return value >= TRACK_GAUGE_MIN_MM && value <= TRACK_GAUGE_MAX_MM;
 }
 
+function capitalizePlaceName(value: string): string {
+  return value
+    .split(/(\s*-\s*|\s+)/)
+    .map((part) => {
+      if (!part.trim() || part.includes("-")) return part;
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    })
+    .join("");
+}
+
+function hasLowercasePlaceName(value: string): boolean {
+  return /(^|[\s-])[а-яё]/u.test(value);
+}
+
 function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
   const gaugeRe = new RegExp(
     `${WORD_LEFT}(?:уширение|ширина)\\s+колеи(?<middle>[\\sA-Za-zА-Яа-яЁё,.-]{0,30}?)(?<first>\\d{3,4})\\s+(?<second>\\d{3,4})\\s*мм${WORD_RIGHT}`,
@@ -116,7 +130,7 @@ function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
   const patterns: Array<[RegExp, TranscriptIssueSeverity, string, string]> = [
     [
       new RegExp(`${WORD_LEFT}пике${WORD_RIGHT}`, "giu"),
-      "warning",
+      "error",
       "Похоже на неполное слово",
       "Возможно, имелось в виду \"пикет\". Проверьте привязку.",
     ],
@@ -153,6 +167,51 @@ function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
   }
 }
 
+function collectPlaceNameIssues(text: string, issues: DraftIssue[]): void {
+  const peregonRe = new RegExp(
+    `${WORD_LEFT}перегон\\s+(?<name>[А-Яа-яЁё]+(?:\\s*-\\s*[А-Яа-яЁё]+)+)`,
+    "giu",
+  );
+  const stationRe = new RegExp(
+    `${WORD_LEFT}станци[ия]\\s+(?<name>[А-Яа-яЁё]+)`,
+    "giu",
+  );
+
+  for (const match of text.matchAll(peregonRe)) {
+    const name = match.groups?.name ?? "";
+    if (!hasLowercasePlaceName(name)) continue;
+    const start = (match.index ?? 0) + match[0].indexOf(name);
+    addIssue(issues, {
+      start,
+      end: start + name.length,
+      severity: "warning",
+      title: "Название перегона с маленькой буквы",
+      description: "Названия станций в перегоне лучше писать с большой буквы: например, \"Магнетиты - Шонгуй\".",
+      safeFix: {
+        replacement: capitalizePlaceName(name),
+        label: "Написать станции с большой буквы",
+      },
+    });
+  }
+
+  for (const match of text.matchAll(stationRe)) {
+    const name = match.groups?.name ?? "";
+    if (!hasLowercasePlaceName(name)) continue;
+    const start = (match.index ?? 0) + match[0].indexOf(name);
+    addIssue(issues, {
+      start,
+      end: start + name.length,
+      severity: "warning",
+      title: "Название станции с маленькой буквы",
+      description: "Название станции лучше писать с большой буквы.",
+      safeFix: {
+        replacement: capitalizePlaceName(name),
+        label: "Написать станцию с большой буквы",
+      },
+    });
+  }
+}
+
 function finalizeIssues(issues: DraftIssue[]): TranscriptIssue[] {
   const sorted = [...issues].sort((a, b) => {
     if (a.start !== b.start) return a.start - b.start;
@@ -172,28 +231,8 @@ export function analyzeTranscriptQuality(text: string): TranscriptIssue[] {
   const issues: DraftIssue[] = [];
   collectGaugeIssues(text, issues);
   collectRailwayTermIssues(text, issues);
+  collectPlaceNameIssues(text, issues);
   return finalizeIssues(issues);
-}
-
-export function mergeTranscriptIssues(
-  localIssues: TranscriptIssue[],
-  aiIssues: TranscriptIssue[],
-): TranscriptIssue[] {
-  const issues = [...localIssues, ...aiIssues].filter((issue) => issue.end > issue.start);
-  const sorted = issues.sort((a, b) => {
-    if (a.start !== b.start) return a.start - b.start;
-    if (a.severity !== b.severity) return a.severity === "error" ? -1 : 1;
-    return b.end - a.end;
-  });
-
-  const result: TranscriptIssue[] = [];
-  let cursor = -1;
-  for (const issue of sorted) {
-    if (issue.start < cursor) continue;
-    result.push(issue);
-    cursor = issue.end;
-  }
-  return result;
 }
 
 export function buildTranscriptQualitySegments(

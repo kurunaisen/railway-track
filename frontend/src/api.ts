@@ -3,7 +3,6 @@ import { apiBase } from "./config";
 import type { RailwayRow } from "./railway/types";
 import { parseRailwayRowsPayload } from "./railway/schema";
 import { normalizeRailwayRows } from "./railway/normalizeRailwayRows";
-import type { TranscriptIssue } from "./railway/transcriptQuality";
 
 export type { RailwayRow };
 
@@ -196,27 +195,6 @@ export async function extractRailwayRows(
   const data = await res.json();
   const rows = parseRailwayRowsPayload(data);
   return normalizeRailwayRows(rows);
-}
-
-export async function reviewTranscriptWithAi(transcript: string): Promise<TranscriptIssue[]> {
-  const res = await apiFetch(`${API}/railway/transcript-review`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ transcript }),
-  });
-  const data = await res.json();
-  if (!data || !Array.isArray(data.issues)) return [];
-  return data.issues.map((issue: unknown, index: number) => {
-    const item = issue as Partial<TranscriptIssue>;
-    return {
-      id: `ai-${item.start ?? index}-${item.end ?? index}-${index}`,
-      start: Number(item.start ?? 0),
-      end: Number(item.end ?? 0),
-      severity: item.severity === "error" ? "error" : "warning",
-      title: String(item.title ?? "AI проверка"),
-      description: String(item.description ?? "Проверьте этот фрагмент transcript."),
-    } satisfies TranscriptIssue;
-  });
 }
 
 export async function exportRailwayRowsXlsx(
