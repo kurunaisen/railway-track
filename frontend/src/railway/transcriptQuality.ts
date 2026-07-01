@@ -127,6 +127,29 @@ function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
 }
 
 function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
+  const magnetityShonguyRe = new RegExp(
+    `${WORD_LEFT}(?<name>(?:магн[еи]т\\w*\\s*[-–—]?\\s*ш[оа](?:н|нг|мг)\\w*|(?:от\\s+)?никит\\w*\\s+ш[оа](?:н|нг|мг)\\w*))${WORD_RIGHT}`,
+    "giu",
+  );
+  const matchedAliases: Array<[number, number]> = [];
+  for (const match of text.matchAll(magnetityShonguyRe)) {
+    const name = match.groups?.name ?? "";
+    const start = (match.index ?? 0) + match[0].indexOf(name);
+    const end = start + name.length;
+    matchedAliases.push([start, end]);
+    addIssue(issues, {
+      start,
+      end,
+      severity: "warning",
+      title: "Похоже на перегон Магнетиты - Шонгуй",
+      description: "ASR часто искажает этот перегон. Проверьте и при необходимости примените исправление.",
+      safeFix: {
+        replacement: "Магнетиты - Шонгуй",
+        label: "Заменить на Магнетиты - Шонгуй",
+      },
+    });
+  }
+
   const patterns: Array<[RegExp, TranscriptIssueSeverity, string, string]> = [
     [
       new RegExp(`${WORD_LEFT}пике${WORD_RIGHT}`, "giu"),
@@ -146,32 +169,44 @@ function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
       "Проверьте название станции",
       "Возможно, ASR распознал \"Магнетиты\" как \"магнититы\".",
     ],
-    [
-      new RegExp(`${WORD_LEFT}(?:км|километр)\\s*(?:пикет|пк)${WORD_RIGHT}`, "giu"),
-      "warning",
-      "Неполная привязка",
-      "Перед словом «км/километр» не найден номер километра. Проверьте привязку км/пк/м.",
-    ],
   ];
 
   for (const [pattern, severity, title, description] of patterns) {
     for (const match of text.matchAll(pattern)) {
+      const start = match.index ?? 0;
+      const end = start + match[0].length;
+      if (matchedAliases.some(([aliasStart, aliasEnd]) => start >= aliasStart && end <= aliasEnd)) {
+        continue;
+      }
       addIssue(issues, {
-        start: match.index ?? 0,
-        end: (match.index ?? 0) + match[0].length,
+        start,
+        end,
         severity,
         title,
         description,
       });
     }
   }
+
+  const missingKmNumberRe = new RegExp(
+    `${WORD_LEFT}(?:км|километр)\\s*(?:пикет|пк)${WORD_RIGHT}`,
+    "giu",
+  );
+  for (const match of text.matchAll(missingKmNumberRe)) {
+    const start = match.index ?? 0;
+    const before = text.slice(Math.max(0, start - 12), start);
+    if (/\d+\s*$/u.test(before)) continue;
+    addIssue(issues, {
+      start,
+      end: start + match[0].length,
+      severity: "warning",
+      title: "Неполная привязка",
+      description: "Перед словом «км/километр» не найден номер километра. Проверьте привязку км/пк/м.",
+    });
+  }
 }
 
 function collectPlaceNameIssues(text: string, issues: DraftIssue[]): void {
-  const magnetityShonguyRe = new RegExp(
-    `${WORD_LEFT}(?<name>(?:магн[еи]т\\w*\\s*[-–—]?\\s*ш[оа](?:н|нг|мг)\\w*|(?:от\\s+)?никит\\w*\\s+ш[оа](?:н|нг|мг)\\w*))${WORD_RIGHT}`,
-    "giu",
-  );
   const peregonRe = new RegExp(
     `${WORD_LEFT}перегон\\s+(?<name>[А-Яа-яЁё]+(?:\\s*-\\s*[А-Яа-яЁё]+)+)`,
     "giu",
@@ -180,22 +215,6 @@ function collectPlaceNameIssues(text: string, issues: DraftIssue[]): void {
     `${WORD_LEFT}станци[ия]\\s+(?<name>[А-Яа-яЁё]+)`,
     "giu",
   );
-
-  for (const match of text.matchAll(magnetityShonguyRe)) {
-    const name = match.groups?.name ?? "";
-    const start = (match.index ?? 0) + match[0].indexOf(name);
-    addIssue(issues, {
-      start,
-      end: start + name.length,
-      severity: "warning",
-      title: "Похоже на перегон Магнетиты - Шонгуй",
-      description: "ASR часто искажает этот перегон. Проверьте и при необходимости примените исправление.",
-      safeFix: {
-        replacement: "Магнетиты - Шонгуй",
-        label: "Заменить на Магнетиты - Шонгуй",
-      },
-    });
-  }
 
   for (const match of text.matchAll(peregonRe)) {
     const name = match.groups?.name ?? "";
