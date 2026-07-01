@@ -8,6 +8,7 @@ import logging
 from anthropic import Anthropic
 
 from app.config import settings
+from app.services.llm.extraction_schema import RAILWAY_EXTRACTION_SCHEMA
 from app.services.llm.json_schema import (
     build_llm_system_rules,
     parse_llm_json,
@@ -29,6 +30,7 @@ def parse_structured_with_claude(
 
     client = Anthropic(api_key=settings.anthropic_api_key)
     payload = _build_user_payload(full_text, segments, logical_blocks)
+    payload["json_schema"] = RAILWAY_EXTRACTION_SCHEMA
     message = client.messages.create(
         model=settings.anthropic_model,
         max_tokens=4096,
@@ -42,7 +44,7 @@ def parse_structured_with_claude(
     )
     text = message.content[0].text if message.content else "{}"
     data = parse_llm_json(text)
-    logger.info("Claude structured: %d records", len(data.get("records", [])))
+    logger.info("Claude structured: %d rows", len(data.get("rows", [])))
     return data
 
 

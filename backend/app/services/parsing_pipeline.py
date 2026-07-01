@@ -44,7 +44,7 @@ def run_parsing_pipeline(
     if _llm_available():
         try:
             llm_records, structured = parse_with_primary_llm(full_text, segments, blocks_payload)
-            n_llm_logical, n_llm_pos = count_structured_records(structured or {"records": []})
+            n_llm_logical, n_llm_pos = count_structured_records(structured or {"rows": []})
             llm_rows = enforce_single_position_per_row(llm_records)
 
             llm_ok = (

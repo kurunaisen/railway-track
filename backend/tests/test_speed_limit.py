@@ -185,20 +185,16 @@ def test_llm_defect_with_embedded_speed():
     from app.services.llm.json_schema import structured_to_parsed_rows
 
     data = {
-        "records": [
+        "rows": [
             {
-                "sequence_number": 1,
-                "haul_name": "Лапландия-Пулозеро",
-                "track_number": "2",
-                "km_value": "1353",
-                "picket_value": "2",
-                "items": [
-                    {
-                        "order_in_record": 1,
-                        "position_type": "defect",
-                        "defect_text": "уширение рельсовой колеи 1543 мм ограничение скорости 60",
-                    }
-                ],
+                "location": "Лапландия-Пулозеро",
+                "assetKind": "track",
+                "assetNumber": "2",
+                "reference": "1353 км, пк 2",
+                "defect": "уширение рельсовой колеи 1543 мм",
+                "speedLimit": 60,
+                "note": None,
+                "sourceText": "уширение рельсовой колеи 1543 мм ограничение скорости 60",
             }
         ]
     }

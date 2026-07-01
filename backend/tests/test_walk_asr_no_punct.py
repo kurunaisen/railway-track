@@ -87,12 +87,7 @@ def test_pipeline_keeps_four_rows_when_llm_would_merge(monkeypatch):
             raw_text="уширение колеи 1543",
             logical_record_index=1,
         )
-        structured = {
-            "records": [
-                {"sequence_number": 1, "items": [{"order_in_record": 1}]},
-                {"sequence_number": 2, "items": [{"order_in_record": 1}]},
-            ]
-        }
+        structured = {"rows": [{}, {}]}
         return [merged, gauge], structured
 
     monkeypatch.setattr(pp, "parse_with_primary_llm", fake_llm)

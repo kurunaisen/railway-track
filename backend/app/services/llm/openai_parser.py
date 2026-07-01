@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from app.config import settings
 from app.services.domain_terms import KNOWN_TERMS
+from app.services.llm.extraction_schema import RAILWAY_EXTRACTION_SCHEMA, openai_response_format
 from app.services.llm.json_schema import (
     STRUCTURED_JSON_EXAMPLE,
     build_llm_system_rules,
@@ -36,11 +37,12 @@ def _build_user_payload(
         "logical_blocks": logical_blocks or [],
         "domain_terms_sample": sorted(KNOWN_TERMS)[:60],
         "norms_reference": build_norms_reference(),
+        "json_schema": RAILWAY_EXTRACTION_SCHEMA,
         "output_format_example": STRUCTURED_JSON_EXAMPLE,
         "instruction": (
-            "Верни JSON {\"records\": [...]} строго по формату output_format_example. "
-            f"Минимум {len(logical_blocks or [])} records — по одному на каждый logical_block. "
-            "Используй asr_segments для start_sec/end_sec."
+            'Верни JSON {"rows": [...]} строго по JSON Schema railway_rows (structured output). '
+            f"Минимум {len(logical_blocks or [])} rows — по одной неисправности на логический фрагмент. "
+            "Используй asr_segments для контекста таймкодов в sourceText."
         ),
     }
 
@@ -61,12 +63,12 @@ def parse_structured_with_openai(
             {"role": "user", "content": json.dumps(_build_user_payload(full_text, segments, logical_blocks), ensure_ascii=False)},
         ],
         temperature=0.0,
-        response_format={"type": "json_object"},
+        response_format=openai_response_format(),
     )
     content = response.choices[0].message.content or "{}"
     data = parse_llm_json(content)
-    n_rec, n_pos = len(data.get("records", [])), sum(len(r.get("items", [])) for r in data.get("records", []))
-    logger.info("OpenAI structured: %d records, %d items", n_rec, n_pos)
+    n_rows = len(data.get("rows", []))
+    logger.info("OpenAI structured: %d rows", n_rows)
     return data
 
 

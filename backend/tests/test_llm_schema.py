@@ -1,5 +1,6 @@
-"""FR 15.2 — валидация и конвертация строгого JSON от LLM."""
+"""FR 15.2 — валидация и конвертация strict JSON rows[] от LLM."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -7,59 +8,90 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
 
+from app.services.llm.extraction_schema import (
+    RAILWAY_EXTRACTION_SCHEMA,
+    openai_response_format,
+)
 from app.services.llm.json_schema import (
     parse_llm_json,
     structured_to_parsed_rows,
     validate_structured_payload,
 )
 
-
 SAMPLE = {
-    "records": [
+    "rows": [
         {
-            "sequence_number": 1,
-            "haul_name": "А-Б",
-            "track_number": "2",
-            "km_value": "35",
-            "picket_value": "5+20",
-            "items": [
-                {
-                    "order_in_record": 1,
-                    "parameter_name": "Перекос",
-                    "value_numeric": 4,
-                    "unit": "мм",
-                    "position_type": "parameter",
-                }
-            ],
+            "location": "А-Б",
+            "assetKind": "track",
+            "assetNumber": "2",
+            "reference": "35 км, пк 5+20",
+            "defect": "перекос 4 мм",
+            "speedLimit": None,
+            "note": None,
+            "sourceText": "перегон А-Б 2 путь 35 км пикет 5+20 перекос 4 мм",
         },
         {
-            "sequence_number": 2,
-            "haul_name": "В-Г",
-            "track_number": "1",
-            "km_value": "12",
-            "picket_value": "3+40",
-            "items": [
-                {
-                    "order_in_record": 1,
-                    "parameter_name": "Просадка",
-                    "value_numeric": 6,
-                    "unit": "мм",
-                    "position_type": "defect",
-                    "defect_text": "просадка",
-                }
-            ],
+            "location": "В-Г",
+            "assetKind": "track",
+            "assetNumber": "1",
+            "reference": "12 км, пк 3+40",
+            "defect": "просадка 6 мм",
+            "speedLimit": None,
+            "note": None,
+            "sourceText": "перегон В-Г 1 путь 12 км пикет 3+40 просадка 6 мм",
         },
     ]
 }
 
 
+def test_openai_response_format_uses_json_schema():
+    fmt = openai_response_format()
+    assert fmt["type"] == "json_schema"
+    assert fmt["json_schema"]["name"] == "railway_rows"
+    assert fmt["json_schema"]["strict"] is True
+    assert "rows" in fmt["json_schema"]["schema"]["properties"]
+
+
+def test_railway_extraction_schema_matches_contract():
+    assert RAILWAY_EXTRACTION_SCHEMA["name"] == "railway_rows"
+    item = RAILWAY_EXTRACTION_SCHEMA["schema"]["properties"]["rows"]["items"]
+    assert set(item["required"]) == {
+        "location",
+        "assetKind",
+        "assetNumber",
+        "reference",
+        "defect",
+        "speedLimit",
+        "note",
+        "sourceText",
+    }
+
+
 def test_validate_structured_payload():
-    assert validate_structured_payload(SAMPLE)["records"][0]["sequence_number"] == 1
+    assert len(validate_structured_payload(SAMPLE)["rows"]) == 2
 
 
 def test_rejects_invalid_json():
     with pytest.raises(ValueError):
-        validate_structured_payload({"items": []})
+        validate_structured_payload({"records": []})
+
+
+def test_rejects_missing_source_text():
+    bad = {
+        "rows": [
+            {
+                "location": None,
+                "assetKind": None,
+                "assetNumber": None,
+                "reference": None,
+                "defect": "x",
+                "speedLimit": None,
+                "note": None,
+            }
+        ]
+    }
+    with pytest.raises(ValueError):
+        validate_structured_payload(bad)
 
 
 def test_structured_to_parsed_rows():
@@ -67,13 +99,34 @@ def test_structured_to_parsed_rows():
     assert len(rows) == 2
     assert rows[0].peregon == "А-Б"
     assert rows[0].put == "2"
-    assert rows[0].parameter == "перекос"
+    assert rows[0].defect == "перекос 4 мм"
+    assert rows[0].value == "4"
     assert rows[0].logical_record_index == 0
-    assert rows[0].position_index == 0
-    assert rows[1].defect == "просадка"
+    assert rows[1].defect == "просадка 6 мм"
+
+
+def test_structured_switch_row():
+    data = {
+        "rows": [
+            {
+                "location": "Мурманск",
+                "assetKind": "switch",
+                "assetNumber": "10",
+                "reference": None,
+                "defect": "износ рамного рельса 7 мм",
+                "speedLimit": None,
+                "note": "в острии остряка",
+                "sourceText": "стрелочный перевод 10 износ рамного рельса 7 мм",
+            }
+        ]
+    }
+    rows = structured_to_parsed_rows(data)
+    assert rows[0].switch == "10"
+    assert rows[0].put is None
+    assert rows[0].comment == "в острии остряка"
 
 
 def test_parse_llm_json_strips_markdown_fence():
-    raw = '```json\n' + __import__("json").dumps(SAMPLE, ensure_ascii=False) + '\n```'
+    raw = "```json\n" + json.dumps(SAMPLE, ensure_ascii=False) + "\n```"
     data = parse_llm_json(raw)
-    assert len(data["records"]) == 2
+    assert len(data["rows"]) == 2

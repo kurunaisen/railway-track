@@ -42,5 +42,5 @@ def test_llm_system_rules_include_generated_norms():
     assert "автогенерация из gauge_norms" in rules
     assert "1543" in rules
     assert "модуль структурирования дефектов" in rules
-    assert "Не придумывай ограничения скорости" in rules
-    assert "switch_number=null" in rules
+    assert "speedLimit" in rules
+    assert "rows[]" in rules
