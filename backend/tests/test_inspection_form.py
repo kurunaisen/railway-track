@@ -17,6 +17,7 @@ class Rec:
     peregon: str | None = None
     uchastok: str | None = None
     put: str | None = None
+    switch: str | None = None
     obekt: str | None = None
     km: str | None = None
     piket: str | None = None
@@ -105,6 +106,17 @@ def test_path_and_switch_together():
         raw_text="Перегон Кица-Блокпост, путь номер 4, стрелочный перевод 2, километр 1384",
     )
     assert format_track(rec) == "4 гл.п., стр.п. 2"
+
+
+def test_path_and_switch_from_record_fields():
+    """LLM: put/switch в полях записи, в raw_text только дефект."""
+    rec = Rec(
+        put="5",
+        switch="15",
+        uchastok="Кола",
+        raw_text="износ сердечника крестовины 8 мм",
+    )
+    assert format_track(rec) == "5, стр.п. 15"
 
 
 def test_switch_only_without_duplicate_path():

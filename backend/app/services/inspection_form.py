@@ -129,8 +129,10 @@ def resolve_track_parts(rec: FormRowSource) -> tuple[str | None, str | None, str
     path_display: str | None = None
     if path_num:
         path_display = _format_path_number(path_num, rec, *sources)
-    elif switch_num is None and put.isdigit():
-        path_display = _format_path_number(put, rec, *sources)
+    elif put.isdigit():
+        # Не дублировать «3, стр.п. 3», если put совпал с номером перевода из текста.
+        if not (switch_num and put == switch_num):
+            path_display = _format_path_number(put, rec, *sources)
 
     switch_display = f"стр.п. {switch_num}" if switch_num else None
 
