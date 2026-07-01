@@ -9,6 +9,7 @@ StorageBackend = Literal["local", "s3", "supabase"]
 AsrProvider = Literal["faster-whisper", "yandex"]
 ParserMode = Literal["regex", "openai", "hybrid"]
 LlmPrimaryParser = Literal["openai", "anthropic"]
+TableExportMode = Literal["evidenceOnly", "normsEnriched"]
 
 
 class Settings(BaseSettings):
@@ -79,6 +80,12 @@ class Settings(BaseSettings):
     # ── Нормы 2288р: макс. скорость на обслуживаемых участках (км/ч).
     # Лимит из инструкции выше этого значения не записывается — по участку и так не быстрее.
     max_track_speed_kmh: int = 80
+    # Подстановка неисправности/V огр. по 2288р/436/р после ASR (не для таблицы обхода).
+    apply_track_norms_on_save: bool = False
+    # Таблицы 2288р/436/р в системном промпте LLM (иначе модель подставляет «уширение колеи» и V огр.).
+    include_norms_in_llm_prompt: bool = False
+    # evidenceOnly — только явный ASR-сегмент; normsEnriched — нормы 2288р в таблице
+    table_export_mode: TableExportMode = "evidenceOnly"
 
     @field_validator("vercel_url", mode="before")
     @classmethod

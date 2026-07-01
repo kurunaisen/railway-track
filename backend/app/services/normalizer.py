@@ -6,7 +6,7 @@ import re
 
 from app.services.km_parse import merge_hesitated_km_value
 from app.services.parser import ParsedRecord, _extract_switch, _normalize_text
-from app.services.speed_limit import reconcile_speed_limit_rows, drop_orphan_speed_rows
+from app.services.speed_limit import reconcile_speed_limit_rows, drop_orphan_speed_rows, has_explicit_speed_in_text
 from app.services.rail_side import (
     extract_rail_side,
     extract_rail_side_note,
@@ -22,11 +22,11 @@ from app.services.locations import is_peregon_haul
 from app.services.stations import normalize_station_name, CANONICAL_STATIONS
 from app.services.station_km import sanitize_station_km
 from app.services.station_context import propagate_station_context
-from app.services.gauge_norms import is_gauge_context
 from app.services.asr_fixes import fix_asr_transcript
 from app.services.switch_context import propagate_switch_context
 from app.services.segment_reconcile import reconcile_records_by_asr_segments
 from app.services.switch_measurement import apply_switch_measurement_context
+from app.config import settings
 from app.services.track_norms import apply_track_norms_all
 from app.services.canonical_model import _location_only_fragment
 
@@ -301,14 +301,14 @@ def _drop_location_only_rows(records: list[ParsedRecord]) -> list[ParsedRecord]:
     ]
 
 
-def _clear_ungrounded_speed_limit(record: ParsedRecord) -> None:
-    """LLM иногда ставит V огр. от колеи на строку с износом."""
+def _clear_ungrounded_speed_limit(record: ParsedRecord, *, apply_track_norms: bool) -> None:
+    """Убирает V огр., не названное в ASR (и галлюцинации LLM)."""
     if not record.speed_limit or record.position_type == "speed_limit":
         return
-    blob = f"{record.defect or ''} {record.raw_text or ''}".lower()
-    if re.search(r"скорост|ограничен", blob):
+    if has_explicit_speed_in_text(record.raw_text, record.defect, record.comment):
         return
-    if is_gauge_context(blob):
+    if not apply_track_norms:
+        record.speed_limit = None
         return
     defect = (record.defect or "").lower()
     if "износ" in defect and "рамн" in defect:
@@ -318,7 +318,11 @@ def _clear_ungrounded_speed_limit(record: ParsedRecord) -> None:
 def normalize_all(
     records: list[ParsedRecord],
     source_text: str | None = None,
+    *,
+    apply_track_norms: bool | None = None,
 ) -> list[ParsedRecord]:
+    if apply_track_norms is None:
+        apply_track_norms = settings.apply_track_norms_on_save
     if source_text:
         source_text = fix_asr_transcript(source_text)
     for record in records:
@@ -335,7 +339,8 @@ def normalize_all(
         records = reconcile_records_by_asr_segments(records, source_text)
     records = apply_switch_measurement_context(records)
     records = [normalize_record(r) for r in records]
-    records = apply_track_norms_all(records)
+    if apply_track_norms:
+        records = apply_track_norms_all(records)
     for record in records:
-        _clear_ungrounded_speed_limit(record)
+        _clear_ungrounded_speed_limit(record, apply_track_norms=apply_track_norms)
     return drop_orphan_speed_rows(records)

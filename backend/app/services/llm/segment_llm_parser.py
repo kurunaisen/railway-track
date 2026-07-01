@@ -1,5 +1,5 @@
 """
-LLM: один ASR-сегмент → один вызов → ParsedRow.
+LLM: extractRowsFromSegment для одного ASR-сегмента → ParsedRow.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from app.services.llm.json_schema import (
     parse_llm_row_json,
     structured_to_parsed_rows,
 )
-from app.services.llm.row_segment_validation import validate_rows_for_segment
+from app.services.llm.row_segment_validation import ParsedRow, validate_rows_for_segment
 from app.services.parser import ParsedRecord, TranscriptSegment
 from app.services.railway_segment import SegmentedBlock, segment_railway_text
 
@@ -42,9 +42,11 @@ def _build_segment_payload(block: SegmentedBlock, index: int) -> dict:
         "json_schema": RAILWAY_ROW_EXTRACTION_SCHEMA,
         "instruction": (
             "Извлеки ровно одну строку таблицы из segment. "
-            "location: используй location_hint, если в segment не названо иное. "
-            "sourceText: дословно segment (или его часть с неисправностью). "
-            "Ответ — один объект ParsedRow по JSON Schema railway_row."
+            "location: location_hint, если в segment не названо иное. "
+            "assetKind/assetNumber — только объект этого segment (track XOR switch). "
+            "note: «острие остряка» и аналоги; не defect. "
+            "speedLimit: null, если скорость не названа в segment. "
+            "sourceText: дословно segment."
         ),
     }
 
@@ -68,8 +70,7 @@ def _parse_segment_openai(block: SegmentedBlock, index: int) -> dict:
         temperature=0.0,
         response_format=openai_row_response_format(),
     )
-    content = response.choices[0].message.content or "{}"
-    return parse_llm_row_json(content)
+    return parse_llm_row_json(response.choices[0].message.content or "{}")
 
 
 def _parse_segment_claude(block: SegmentedBlock, index: int) -> dict:
@@ -90,8 +91,18 @@ def _parse_segment_claude(block: SegmentedBlock, index: int) -> dict:
             }
         ],
     )
-    text = message.content[0].text if message.content else "{}"
-    return parse_llm_row_json(text)
+    return parse_llm_row_json(message.content[0].text if message.content else "{}")
+
+
+def extract_rows_from_segment_llm(block: SegmentedBlock, index: int = 0) -> list[ParsedRow]:
+    parse_one = (
+        _parse_segment_claude
+        if settings.llm_primary_parser == "anthropic"
+        else _parse_segment_openai
+    )
+    row = parse_one(block, index)
+    row = merge_segment_row(row, block)
+    return validate_rows_for_segment(block.segment, [row])
 
 
 def parse_structured_by_segments(
@@ -100,21 +111,13 @@ def parse_structured_by_segments(
     logical_blocks: list[dict] | None = None,
 ) -> dict:
     """N сегментов → N вызовов LLM → {"rows": [...]}."""
-    del segments, logical_blocks  # таймкоды пока не привязываем к сегментам
+    del segments, logical_blocks
     blocks = _segment_blocks(full_text)
-    parse_one = (
-        _parse_segment_claude
-        if settings.llm_primary_parser == "anthropic"
-        else _parse_segment_openai
-    )
+    rows: list[ParsedRow] = []
 
-    rows: list[dict] = []
     for index, block in enumerate(blocks):
         try:
-            row = parse_one(block, index)
-            row = merge_segment_row(row, block)
-            validated = validate_rows_for_segment(block.segment, [row])
-            rows.append(validated[0])
+            rows.extend(extract_rows_from_segment_llm(block, index))
         except Exception as exc:
             logger.warning("LLM segment %d failed: %s", index + 1, exc)
             raise

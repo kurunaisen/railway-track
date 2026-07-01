@@ -7,11 +7,11 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
 from app.models import AudioFile, Export, ProcessingJob
-from app.services.inspection_form import build_form_rows
+from app.services.evidence_only import is_evidence_only, speed_from_segment
+from app.services.inspection_form import build_form_rows, format_object_kind, format_path, format_switch
 from app.services.inspection_repository import load_flat_rows, load_latest_done_job
 from app.services.session_adapter import audio_file_to_session_out
 from app.services.transcript_crypto import decrypt_transcript_text
-from app.services.inspection_form import format_object_kind, format_path, format_switch
 from app.services.wide_table import build_wide_rows
 
 HEADER_FILL = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
@@ -156,7 +156,7 @@ def _sheet_records_long(records) -> pd.DataFrame:
             "Единица": rec.unit,
             "Неисправность/дефект": rec.defect,
             "Комментарий": rec.comment,
-            "Ограничение скорости": rec.speed_limit,
+            "Ограничение скорости": speed_from_segment(rec) if is_evidence_only() else rec.speed_limit,
             "Таймкод начала": _format_time(rec.segment_start),
             "Таймкод конца": _format_time(rec.segment_end),
             "Спорные поля": ", ".join(rec.disputed_fields),

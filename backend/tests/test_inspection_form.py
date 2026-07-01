@@ -50,7 +50,7 @@ def test_example_row_from_user_template():
     assert format_binding(rec) == "1384 км, пк 4, м 33"
     assert format_defect(rec) == rec.defect
 
-    cols, rows = build_form_rows([rec])
+    cols, rows = build_form_rows([rec], evidence_only=False)
     assert cols == list(FORM_COLUMNS)
     row = rows[0]
     assert row["Nп/п"] == 1

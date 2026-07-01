@@ -44,7 +44,7 @@ def test_koli_asr_four_rows_gauge_and_paths():
     assert wear.value == "7"
     assert gauge.put == "15"
     assert gauge.value == "1544"
-    assert gauge.speed_limit == "60"
+    assert gauge.speed_limit is None
     assert "подряд" in (p12.defect or "").lower() or "3" in (p12.defect or "")
     assert "негодн" in (p11.defect or "").lower()
     assert p12.put == "12"
@@ -84,7 +84,7 @@ def test_gauge_on_path_15_only():
     f = record_to_form_row(gauge, 2)
     assert gauge.put == "15"
     assert gauge.switch is None
-    assert gauge.speed_limit == "60"
+    assert gauge.speed_limit is None
     assert f["№ пути, стрелочного перевода"] == "15"
 
 
@@ -199,10 +199,10 @@ def test_llm_wrong_path_on_wear_row_reconciled():
         ),
     ]
     rows = normalize_all(llm_rows, source_text=MURMANSK)
-    f1 = record_to_form_row(rows[0], 1)
-    f2 = record_to_form_row(rows[1], 2)
-    f3 = record_to_form_row(rows[2], 3)
-    f4 = record_to_form_row(rows[3], 4)
+    f1 = record_to_form_row(rows[0], 1, evidence_only=False)
+    f2 = record_to_form_row(rows[1], 2, evidence_only=False)
+    f3 = record_to_form_row(rows[2], 3, evidence_only=False)
+    f4 = record_to_form_row(rows[3], 4, evidence_only=False)
     assert rows[0].put is None
     assert f1["№ пути, стрелочного перевода"] == "стр.п. 10"
     assert f1["Примечание"] and "остри" in f1["Примечание"].lower()

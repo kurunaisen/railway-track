@@ -29,3 +29,8 @@ def test_strp_to_switch_phrase():
 
 def test_collapses_whitespace():
     assert normalize_asr_text("  пусть   15   коли  ") == "путь 15 колеи"
+
+
+def test_ostrii_to_ostrie():
+    assert "острие остряка" in normalize_asr_text("в острии остряка").lower()
+    assert "острии" not in normalize_asr_text("в острии остряка").lower()

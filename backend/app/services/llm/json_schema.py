@@ -15,6 +15,7 @@ from app.services.peregons import peregon_names_for_prompt
 from app.services.speed_limit import apply_speed_limit_fields, strip_speed_limit_phrases
 from app.services.stations import normalize_station_name
 from app.services.stations import station_names_for_prompt
+from app.config import settings
 from app.services.norms_for_llm import build_norms_summary_for_llm
 from app.services.railway_segment import SegmentedBlock
 from app.services.switch_terminology import build_switch_glossary_for_llm
@@ -105,12 +106,16 @@ _LLM_SYSTEM_RULES_BASE = (
 _LLM_SEGMENT_SYSTEM_RULES_BASE = _LLM_SEGMENT_RULES + "\n\n" + _LLM_SEGMENT_FIELDS
 
 
+def _optional_norms_block() -> str:
+    if not settings.include_norms_in_llm_prompt:
+        return ""
+    return "\n" + build_norms_summary_for_llm() + "\n\n"
+
+
 def build_llm_system_rules() -> str:
     return (
         _LLM_SYSTEM_RULES_BASE
-        + "\n"
-        + build_norms_summary_for_llm()
-        + "\n\n"
+        + _optional_norms_block()
         + build_switch_glossary_for_llm()
     )
 
@@ -118,9 +123,7 @@ def build_llm_system_rules() -> str:
 def build_llm_segment_system_rules() -> str:
     return (
         _LLM_SEGMENT_SYSTEM_RULES_BASE
-        + "\n"
-        + build_norms_summary_for_llm()
-        + "\n\n"
+        + _optional_norms_block()
         + build_switch_glossary_for_llm()
     )
 

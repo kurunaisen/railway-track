@@ -27,6 +27,7 @@ _TIP_STRIP_RE = re.compile(
     r"\b(?:в\s+|на\s+)?остри[ея]\s+остряка\b",
     re.IGNORECASE,
 )
+_TIP_SEGMENT_RE = _TIP_QUALIFIER_RE
 _WS_RE = re.compile(r"\s+")
 
 
@@ -61,13 +62,25 @@ def validate_rows_for_segment(segment: str, rows: list[ParsedRow]) -> list[Parse
         if track_match:
             fixed["assetKind"] = "track"
             fixed["assetNumber"] = track_match.group(1)
-
-        if switch_match:
+        elif switch_match:
             fixed["assetKind"] = "switch"
             fixed["assetNumber"] = switch_match.group(1)
 
         if not explicit_speed:
             fixed["speedLimit"] = None
+        elif fixed.get("speedLimit") is None and explicit_speed:
+            try:
+                fixed["speedLimit"] = int(explicit_speed.group(1))
+            except (TypeError, ValueError):
+                pass
+
+        if _TIP_SEGMENT_RE.search(normalized):
+            qual = _extract_qualifier(normalized)
+            note = (fixed.get("note") or "").strip()
+            if not note:
+                fixed["note"] = qual
+            elif qual.lower() not in note.lower():
+                fixed["note"] = f"{note}; {qual}"
 
         _fix_tip_in_defect(fixed)
         result.append(fixed)

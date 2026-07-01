@@ -49,6 +49,14 @@ def extract_speed_limit(text: str | None) -> str | None:
     return None
 
 
+def has_explicit_speed_in_text(*texts: str | None) -> bool:
+    """Скорость названа в ASR/тексте (не выведена по нормам 2288р/436/р)."""
+    for text in texts:
+        if text and extract_speed_limit(text):
+            return True
+    return False
+
+
 def strip_speed_limit_phrases(text: str | None) -> str:
     if not text:
         return ""

@@ -35,12 +35,21 @@ def test_reference_bands_match_track_norms():
     assert any("100" in b["text"] for b in gap["bands"])
 
 
-def test_llm_system_rules_include_generated_norms():
+def test_llm_system_rules_include_generated_norms(monkeypatch):
     from app.services.llm.json_schema import build_llm_system_rules
 
+    monkeypatch.setattr("app.services.llm.json_schema.settings.include_norms_in_llm_prompt", True)
     rules = build_llm_system_rules()
     assert "автогенерация из gauge_norms" in rules
     assert "1543" in rules
     assert "модуль структурирования дефектов" in rules
     assert "speedLimit" in rules
     assert "rows[]" in rules
+
+
+def test_llm_system_rules_skip_norms_by_default():
+    from app.services.llm.json_schema import build_llm_system_rules
+
+    rules = build_llm_system_rules()
+    assert "автогенерация из gauge_norms" not in rules
+    assert "1543" not in rules

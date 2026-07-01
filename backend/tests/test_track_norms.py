@@ -36,7 +36,7 @@ def test_auto_speed_60_when_gap_over_26():
     apply_track_norms(rec)
     assert rec.defect == "стыковой зазор"
     assert rec.speed_limit == "60"
-    form = record_to_form_row(rec, 1)
+    form = record_to_form_row(rec, 1, evidence_only=False)
     assert form["Ограничение скорости"] == "60 км/ч"
 
 
@@ -78,7 +78,7 @@ def test_gap_24_26_no_speed_when_line_max_80():
 
 def test_joint_gap_from_transcript():
     text = "Перегон А — Б, путь 1, км 10, пикет 2, стыковой зазор 28 мм."
-    rows = normalize_all(run_parsing_pipeline(text).records)
+    rows = normalize_all(run_parsing_pipeline(text).records, apply_track_norms=True)
     row = rows[0]
     assert row.speed_limit == "60"
     assert row.defect == "стыковой зазор"
@@ -165,7 +165,7 @@ def test_gauge_from_walk_transcript():
         "На станции магнититы 5 путь 2 звено не закручен 1 стыковой болт "
         "И уширение колеи 1400 1543 мм."
     )
-    rows = normalize_all(run_parsing_pipeline(text).records)
+    rows = normalize_all(run_parsing_pipeline(text).records, apply_track_norms=True)
     gauge_row = [r for r in rows if r.defect and "уширен" in r.defect][0]
     assert gauge_row.value == "1543"
     assert gauge_row.speed_limit == "60"

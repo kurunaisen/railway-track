@@ -5,9 +5,22 @@ from __future__ import annotations
 import re
 from typing import Protocol
 
+from app.services.evidence_only import (
+    binding_from_segment,
+    defect_from_segment,
+    format_track_from_segment,
+    is_evidence_only,
+    location_from_segment,
+    note_from_segment,
+    speed_from_segment,
+)
 from app.services.locations import format_location_for_table, is_peregon_haul
 from app.services.rail_side import extract_rail_side_note, is_rail_side_only_fragment
-from app.services.speed_limit import format_speed_limit_display, is_speed_parameter, strip_speed_limit_phrases
+from app.services.speed_limit import (
+    format_speed_limit_display,
+    is_speed_parameter,
+    strip_speed_limit_phrases,
+)
 
 FORM_COLUMNS: tuple[str, ...] = (
     "Nп/п",
@@ -37,20 +50,16 @@ class FormRowSource(Protocol):
     raw_text: str | None
 
 
-# Явные фразы: «5 путь», «путь номер 4», «стрелочный перевод 2».
 _PATH_N_PUT_RE = re.compile(r"(\d+)\s+путь\b", re.IGNORECASE)
 _PATH_EXPLICIT_RE = re.compile(
     r"(?:главн\w*\s+)?путь\s*(?:№|номер|n\.?)?\s*(\d+)",
     re.IGNORECASE,
 )
 _SWITCH_EXPLICIT_RE = re.compile(
-    r"стрелочн(?:ый|ого|ом|ая)?\s+перевод(?:а|е|у|ом)?\s*(?:№|номер|n\.?)?\s*(\d+)",
+    r"стрелочн(?:ый|ного|ом|ая)?\s+перевод(?:а|е|у|ом)?\s*(?:№|номер|n\.?)?\s*(\d+)",
     re.IGNORECASE,
 )
-_MAIN_PATH_EXPLICIT_RE = re.compile(
-    r"главн\w*\s+путь|\bгл\.?\s*п\.?",
-    re.IGNORECASE,
-)
+_MAIN_PATH_EXPLICIT_RE = re.compile(r"главн\w*\s+путь|\bгл\.?\s*п\.?", re.IGNORECASE)
 _PEREGON_WORD_RE = re.compile(r"\bперегон\b", re.IGNORECASE)
 
 
@@ -89,9 +98,7 @@ def _explicit_switch_number(*texts: str | None) -> str | None:
 
 def _main_path_explicit(*texts: str | None) -> bool:
     for text in texts:
-        if not text:
-            continue
-        if _MAIN_PATH_EXPLICIT_RE.search(_normalize_track_text(text)):
+        if text and _MAIN_PATH_EXPLICIT_RE.search(_normalize_track_text(text)):
             return True
     return False
 
@@ -110,19 +117,16 @@ def _is_peregon_context(rec: FormRowSource, *texts: str | None) -> bool:
 
 
 def _format_path_number(num: str, rec: FormRowSource, *texts: str | None) -> str:
-    """На перегоне — всегда гл.п.; на станции — только номер, если не сказали «главный путь»."""
     if _is_peregon_context(rec, *texts) or _main_path_explicit(*texts):
         return f"{num} гл.п."
     return num
 
 
 def resolve_track_parts(rec: FormRowSource) -> tuple[str | None, str | None, str | None]:
-    """
-    Путь и стр.п. — только из полей put/switch записи.
-    raw_text не парсим: LLM часто кладёт туда весь блок («… путь 15 …»).
-    """
     put_val = (rec.put or "").strip()
     switch_val = (getattr(rec, "switch", None) or "").strip() or None
+    if not switch_val:
+        switch_val = _explicit_switch_number(rec.raw_text)
 
     path_display: str | None = None
     if put_val.isdigit():
@@ -231,7 +235,24 @@ def format_defect(rec: FormRowSource) -> str:
     return ""
 
 
-def record_to_form_row(rec: FormRowSource, index: int) -> dict[str, str | int | None]:
+def record_to_form_row(
+    rec: FormRowSource,
+    index: int,
+    *,
+    evidence_only: bool | None = None,
+    asr_faithful: bool | None = None,
+) -> dict[str, str | int | None]:
+    del asr_faithful
+    if is_evidence_only(mode=evidence_only):
+        return {
+            FORM_COLUMNS[0]: index,
+            FORM_COLUMNS[1]: location_from_segment(rec) or None,
+            FORM_COLUMNS[2]: format_track_from_segment(rec) or None,
+            FORM_COLUMNS[3]: binding_from_segment(rec) or None,
+            FORM_COLUMNS[4]: defect_from_segment(rec) or None,
+            FORM_COLUMNS[5]: format_speed_limit_display(speed_from_segment(rec)),
+            FORM_COLUMNS[6]: note_from_segment(rec) or None,
+        }
     return {
         FORM_COLUMNS[0]: index,
         FORM_COLUMNS[1]: format_location(rec) or None,
@@ -243,6 +264,15 @@ def record_to_form_row(rec: FormRowSource, index: int) -> dict[str, str | int | 
     }
 
 
-def build_form_rows(records: list[FormRowSource]) -> tuple[list[str], list[dict]]:
-    rows = [record_to_form_row(rec, i) for i, rec in enumerate(records, start=1)]
+def build_form_rows(
+    records: list[FormRowSource],
+    *,
+    evidence_only: bool | None = None,
+    asr_faithful: bool | None = None,
+) -> tuple[list[str], list[dict]]:
+    mode = evidence_only if evidence_only is not None else asr_faithful
+    rows = [
+        record_to_form_row(rec, i, evidence_only=mode)
+        for i, rec in enumerate(records, start=1)
+    ]
     return list(FORM_COLUMNS), rows
