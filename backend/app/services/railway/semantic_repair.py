@@ -61,6 +61,10 @@ _PEREGON_RE = re.compile(
     r"(?=(?:\s+\d{3,5}\s*(?:км|километр)|,|$))",
     re.IGNORECASE,
 )
+_MAGNETITY_SHONGUY_RE = re.compile(
+    r"(?:магн[еи]т\w*\s*[-–—]?\s*ш[оа](?:н|нг|мг)\w*|(?:от\s+)?никит\w*\s+ш[оа](?:н|нг|мг)\w*)",
+    re.IGNORECASE,
+)
 
 
 def _trim(value: str | None) -> str | None:
@@ -161,6 +165,9 @@ def _clean_location_name(name: str) -> str:
 
 
 def _extract_location(text: str, *, allow_plain_fallback: bool = False) -> str | None:
+    if _MAGNETITY_SHONGUY_RE.search(text):
+        return "Перегон Магнетиты - Шонгуй"
+
     match = _PEREGON_RE.search(text)
     if match:
         return f"Перегон {_title_ru(_clean_location_name(match.group('name')))}"

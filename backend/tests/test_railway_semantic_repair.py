@@ -97,8 +97,28 @@ def test_repair_peregon_reference_from_words():
     )
 
     row = rows[0]
-    assert row.location == "Перегон от Никиты Шонгуй"
+    assert row.location == "Перегон Магнетиты - Шонгуй"
     assert row.reference == "1418 км, пк 2, 87 м"
+
+
+def test_repair_known_magnetity_shonguy_aliases():
+    rows = repair_railway_rows(
+        [
+            _row(
+                location="Перегон от никиты шомгу",
+                sourceText="Перегон от никиты шомгу 1418 километр пике 2 87 метр отсутствует 1 стыковой болт",
+                defect="отсутствует 1 стыковой болт",
+            ),
+            _row(
+                location="магнитит шон",
+                sourceText="магнитит шон 249 км пикет 8 уширение рельсовой колеи 1543 мм",
+                defect="уширение рельсовой колеи 1543 мм",
+            ),
+        ]
+    )
+
+    assert rows[0].location == "Перегон Магнетиты - Шонгуй"
+    assert rows[1].location == "Перегон Магнетиты - Шонгуй"
 
 
 def test_repair_keeps_km_pk_reference_without_meter():

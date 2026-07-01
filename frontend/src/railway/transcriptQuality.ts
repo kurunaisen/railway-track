@@ -168,6 +168,10 @@ function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
 }
 
 function collectPlaceNameIssues(text: string, issues: DraftIssue[]): void {
+  const magnetityShonguyRe = new RegExp(
+    `${WORD_LEFT}(?<name>(?:магн[еи]т\\w*\\s*[-–—]?\\s*ш[оа](?:н|нг|мг)\\w*|(?:от\\s+)?никит\\w*\\s+ш[оа](?:н|нг|мг)\\w*))${WORD_RIGHT}`,
+    "giu",
+  );
   const peregonRe = new RegExp(
     `${WORD_LEFT}перегон\\s+(?<name>[А-Яа-яЁё]+(?:\\s*-\\s*[А-Яа-яЁё]+)+)`,
     "giu",
@@ -176,6 +180,22 @@ function collectPlaceNameIssues(text: string, issues: DraftIssue[]): void {
     `${WORD_LEFT}станци[ия]\\s+(?<name>[А-Яа-яЁё]+)`,
     "giu",
   );
+
+  for (const match of text.matchAll(magnetityShonguyRe)) {
+    const name = match.groups?.name ?? "";
+    const start = (match.index ?? 0) + match[0].indexOf(name);
+    addIssue(issues, {
+      start,
+      end: start + name.length,
+      severity: "warning",
+      title: "Похоже на перегон Магнетиты - Шонгуй",
+      description: "ASR часто искажает этот перегон. Проверьте и при необходимости примените исправление.",
+      safeFix: {
+        replacement: "Магнетиты - Шонгуй",
+        label: "Заменить на Магнетиты - Шонгуй",
+      },
+    });
+  }
 
   for (const match of text.matchAll(peregonRe)) {
     const name = match.groups?.name ?? "";
