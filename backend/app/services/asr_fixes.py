@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from app.services.km_parse import merge_hesitated_km_in_text
 from app.services.user_asr_corrections import apply_user_corrections
 
 _PUST_RE = re.compile(r"\bпусть\b", re.IGNORECASE)
@@ -35,6 +36,7 @@ def normalize_asr_text(text: str) -> str:
     fixed = _LIZAT_RE.sub("лежат", fixed)
     fixed = _MAGNETITY_SHONGUY_RE.sub("Магнетиты — Шонгуй", fixed)
     fixed = _KOLA_MURMANSK_ASR_RE.sub("перегон Кола — Мурманск", fixed)
+    fixed = merge_hesitated_km_in_text(fixed)
     fixed = apply_user_corrections(fixed)
     return _WS_RE.sub(" ", fixed).strip()
 

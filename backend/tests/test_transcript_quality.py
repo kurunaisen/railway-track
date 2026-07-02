@@ -45,3 +45,14 @@ def test_transcript_quality_flags_extra_gauge_number():
 
     assert issue["safeFix"]["replacement"] == ""
     assert "1400" in issue["safeFix"]["label"]
+
+
+def test_transcript_quality_flags_split_km():
+    result = check_transcript_text("на 1000 385 км пикет 5")
+    issue = next(
+        item for item in result["issues"]
+        if item["title"] == "Похоже на раздельно распознанный километр"
+    )
+
+    assert issue["safeFix"]["replacement"] == "1385 км"
+    assert "1385 км" in result["normalized_text"]

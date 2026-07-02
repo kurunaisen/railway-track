@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 
 from app.services.asr_fixes import normalize_asr_text
+from app.services.km_parse import merge_split_km_numbers
 from app.services.parser import detect_unknown_terms
 from app.services.user_asr_corrections import load_user_corrections
 
@@ -121,7 +122,33 @@ def _gauge_issues(text: str, issues: list[TranscriptIssue]) -> None:
             ))
 
 
+def _split_km_issues(text: str, issues: list[TranscriptIssue]) -> None:
+    for match in re.finditer(
+        rf"{WORD_LEFT}(?P<first>\d{{1,4}})\s+(?P<second>\d{{2,3}})\s*(?P<unit>км\.?|километр(?:а|ов)?)\b",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        merged = merge_split_km_numbers(match.group("first"), match.group("second"))
+        if not merged:
+            continue
+        _add_issue(issues, TranscriptIssue(
+            start=match.start("first"),
+            end=match.end("unit"),
+            severity="error",
+            title="Похоже на раздельно распознанный километр",
+            description=(
+                f"ASR распознал километр как «{match.group(0)}». "
+                f"Для привязки это должно быть «{merged} км»."
+            ),
+            safe_fix=TranscriptSafeFix(
+                replacement=f"{merged} км",
+                label=f"Заменить на {merged} км",
+            ),
+        ))
+
+
 def _static_issues(text: str, issues: list[TranscriptIssue]) -> None:
+    _split_km_issues(text, issues)
     _gauge_issues(text, issues)
 
     for match in re.finditer(rf"{WORD_LEFT}(пике){WORD_RIGHT}", text, flags=re.IGNORECASE):

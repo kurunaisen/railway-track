@@ -59,3 +59,9 @@ def test_nikity_shomgu_to_magnetity_shonguy():
     assert "Магнетиты — Шонгуй" in fixed
     assert "никиты" not in fixed.lower()
     assert "шомгу" not in fixed.lower()
+
+
+def test_split_km_to_merged_km():
+    fixed = normalize_asr_text("на 1000 385 км пикет 5")
+    assert "1385 км" in fixed
+    assert "1000 385 км" not in fixed
