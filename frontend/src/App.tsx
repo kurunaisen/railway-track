@@ -106,6 +106,14 @@ function combineSessionTranscripts(sessions: AudioSession[]): string {
     .join("\n\n");
 }
 
+function appendTranscriptDraft(current: string, addition: string | null | undefined): string {
+  const next = addition?.trim();
+  if (!next) return current;
+  if (current.includes(next)) return current;
+  const existing = current.trim();
+  return existing ? `${existing}\n\n${next}` : next;
+}
+
 function TranscriptQualityPreview({
   issues,
   segments,
@@ -286,7 +294,6 @@ export default function App() {
     if (!editable || files.length === 0) return;
     setError(null);
     setSaved(false);
-    setTranscriptDraft("");
     setRailwayRows([]);
     setLoading(true);
     try {
@@ -339,7 +346,7 @@ export default function App() {
       setSession(processed);
       setUploadBatch((prev) => upsertBatchSession(prev, processed));
       if (syncTranscript && processed.full_transcript) {
-        setTranscriptDraft(processed.full_transcript);
+        setTranscriptDraft((current) => appendTranscriptDraft(current, processed.full_transcript));
       }
       return processed;
     } catch (e) {
