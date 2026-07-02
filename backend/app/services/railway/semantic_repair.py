@@ -76,12 +76,14 @@ def _trim(value: str | None) -> str | None:
 
 def _title_ru(value: str) -> str:
     words = []
-    for word in value.split():
-        if word.lower() in {"от", "до", "на"}:
-            words.append(word.lower())
+    for token in re.split(r"(\s+|[-–—])", value):
+        if not token or token.isspace() or token in {"-", "–", "—"}:
+            words.append(token)
+        elif token.lower() in {"от", "до", "на"}:
+            words.append(token.lower())
         else:
-            words.append(word[:1].upper() + word[1:].lower())
-    return " ".join(words)
+            words.append(token[:1].upper() + token[1:].lower())
+    return "".join(words)
 
 
 def _append_warning(warnings: list[str], message: str) -> None:

@@ -127,6 +127,26 @@ def test_repair_known_magnetity_shonguy_aliases():
     assert rows[2].location == "Перегон Магнетиты - Шонгуй"
 
 
+def test_repair_capitalizes_peregon_parts_around_dash():
+    rows = repair_railway_rows(
+        [
+            _row(
+                location="Перегон кола-мурманск",
+                sourceText="Перегон кола-мурманск 1426 км пикет 2 отсутствует 1 стыковой болт",
+                defect="отсутствует 1 стыковой болт",
+            ),
+            _row(
+                location="Перегон Кола - мурманск",
+                sourceText="Перегон Кола - мурманск 1426 км пикет 2 отсутствует 1 стыковой болт",
+                defect="отсутствует 1 стыковой болт",
+            ),
+        ]
+    )
+
+    assert rows[0].location == "Перегон Кола-Мурманск"
+    assert rows[1].location == "Перегон Кола - Мурманск"
+
+
 def test_repair_keeps_km_pk_reference_without_meter():
     rows = repair_railway_rows(
         [
