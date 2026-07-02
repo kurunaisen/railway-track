@@ -24,6 +24,7 @@ const TRACK_GAUGE_MIN_MM = 1510;
 const TRACK_GAUGE_MAX_MM = 1560;
 const WORD_LEFT = "(?<![A-Za-zА-Яа-яЁё0-9])";
 const WORD_RIGHT = "(?![A-Za-zА-Яа-яЁё0-9])";
+const WORD_TAIL = "[A-Za-zА-Яа-яЁё]*";
 
 function addIssue(issues: DraftIssue[], issue: DraftIssue): void {
   if (issue.start < 0 || issue.end <= issue.start) return;
@@ -128,7 +129,7 @@ function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
 
 function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
   const magnetityShonguyRe = new RegExp(
-    `${WORD_LEFT}(?<name>(?:магн[еи]т\\w*\\s*[-–—]?\\s*ш[оа](?:н|нг|мг)\\w*|(?:от\\s+)?никит\\w*\\s+ш[оа](?:н|нг|мг)\\w*))${WORD_RIGHT}`,
+    `${WORD_LEFT}(?<name>(?:магн[еи]т${WORD_TAIL}\\s*[-–—]?\\s*ш[оа](?:н|нг|мг|м)${WORD_TAIL}|(?:от\\s+)?никит${WORD_TAIL}\\s+ш[оа](?:н|нг|мг|м)${WORD_TAIL}))${WORD_RIGHT}`,
     "giu",
   );
   const matchedAliases: Array<[number, number]> = [];
