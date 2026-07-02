@@ -10,6 +10,8 @@ from app.services.user_asr_corrections import load_user_corrections
 
 WORD_LEFT = r"(?<![A-Za-zА-Яа-яЁё0-9])"
 WORD_RIGHT = r"(?![A-Za-zА-Яа-яЁё0-9])"
+TRACK_GAUGE_MIN_MM = 1510
+TRACK_GAUGE_MAX_MM = 1560
 
 
 @dataclass
@@ -60,7 +62,68 @@ def _word_pattern(source: str) -> str:
     return pattern
 
 
+def _is_plausible_gauge(value: int) -> bool:
+    return TRACK_GAUGE_MIN_MM <= value <= TRACK_GAUGE_MAX_MM
+
+
+def _gauge_issues(text: str, issues: list[TranscriptIssue]) -> None:
+    gauge_re = re.compile(
+        rf"{WORD_LEFT}(?:уширение|ширина)\s+колеи(?P<middle>[\sA-Za-zА-Яа-яЁё,.-]{{0,30}}?)(?P<first>\d{{3,4}})\s+(?P<second>\d{{3,4}})\s*мм{WORD_RIGHT}",
+        re.IGNORECASE,
+    )
+    loose_re = re.compile(
+        rf"{WORD_LEFT}(?P<first>\d{{3,4}})\s+(?P<second>\d{{3,4}})\s*мм{WORD_RIGHT}",
+        re.IGNORECASE,
+    )
+    seen: set[tuple[int, int]] = set()
+    for match in gauge_re.finditer(text):
+        first = int(match.group("first"))
+        second = int(match.group("second"))
+        first_start = match.start("first")
+        second_end = match.end("second")
+        seen.add((first_start, second_end))
+        if not _is_plausible_gauge(first) and _is_plausible_gauge(second):
+            _add_issue(issues, TranscriptIssue(
+                start=first_start,
+                end=match.end("first"),
+                severity="error",
+                title="Подозрительное число перед измерением колеи",
+                description=f"Перед «{second} мм» найдено лишнее или ошибочное число «{first}».",
+                safe_fix=TranscriptSafeFix(replacement="", label=f"Удалить «{first}»"),
+            ))
+        else:
+            _add_issue(issues, TranscriptIssue(
+                start=first_start,
+                end=second_end,
+                severity="warning",
+                title="Два числа перед «мм»",
+                description="В измерении колеи найдено два числа подряд. Проверьте, не добавил ли ASR лишнее число.",
+            ))
+
+    for match in loose_re.finditer(text):
+        first = int(match.group("first"))
+        second = int(match.group("second"))
+        first_start = match.start("first")
+        second_end = match.end("second")
+        if (first_start, second_end) in seen:
+            continue
+        context = text[max(0, match.start() - 45): min(len(text), match.end() + 12)]
+        if not re.search(r"коле[яи]", context, re.IGNORECASE):
+            continue
+        if not _is_plausible_gauge(first) and _is_plausible_gauge(second):
+            _add_issue(issues, TranscriptIssue(
+                start=first_start,
+                end=match.end("first"),
+                severity="error",
+                title="Подозрительное число перед измерением колеи",
+                description=f"Рядом с колеёй перед «{second} мм» найдено лишнее или ошибочное число «{first}».",
+                safe_fix=TranscriptSafeFix(replacement="", label=f"Удалить «{first}»"),
+            ))
+
+
 def _static_issues(text: str, issues: list[TranscriptIssue]) -> None:
+    _gauge_issues(text, issues)
+
     for match in re.finditer(rf"{WORD_LEFT}(пике){WORD_RIGHT}", text, flags=re.IGNORECASE):
         original = match.group(1)
         _add_issue(issues, TranscriptIssue(

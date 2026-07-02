@@ -34,3 +34,14 @@ def test_user_domain_terms_remove_unknown_term(tmp_path, monkeypatch):
     assert "новотерм" in {item["term"] for item in detect_unknown_terms("новотерм")}
     terms.add_user_domain_term("новотерм")
     assert "новотерм" not in {item["term"] for item in detect_unknown_terms("новотерм")}
+
+
+def test_transcript_quality_flags_extra_gauge_number():
+    result = check_transcript_text("уширение колеи 1400 1543 мм")
+    issue = next(
+        item for item in result["issues"]
+        if item["title"] == "Подозрительное число перед измерением колеи"
+    )
+
+    assert issue["safeFix"]["replacement"] == ""
+    assert "1400" in issue["safeFix"]["label"]
