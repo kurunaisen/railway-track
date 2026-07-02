@@ -6,13 +6,17 @@ from app.services.parser import detect_unknown_terms
 
 def test_transcript_quality_reports_safe_fixes(tmp_path, monkeypatch):
     monkeypatch.setattr(corr, "CORRECTIONS_FILE", tmp_path / "asr_corrections.json")
-    result = check_transcript_text("Перед гонкой Мурманск Лизат шпалы")
+    result = check_transcript_text("Перед гонкой Мурманск Лизат шпалы пике 8 никиты шомгу")
 
     titles = {issue["title"] for issue in result["issues"]}
     assert "Похоже на перегон Кола - Мурманск" in titles
     assert "Похоже на слово «лежат»" in titles
+    assert "Похоже на слово «пикет»" in titles
+    assert "Похоже на перегон Магнетиты - Шонгуй" in titles
     assert "перегон Кола — Мурманск" in result["normalized_text"]
     assert "лежат" in result["normalized_text"]
+    assert "пикет 8" in result["normalized_text"]
+    assert "Магнетиты — Шонгуй" in result["normalized_text"]
 
 
 def test_transcript_quality_includes_user_dictionary_rule(tmp_path, monkeypatch):

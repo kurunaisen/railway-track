@@ -313,9 +313,9 @@ function AsrDictionaryPanel({
           {visibleUnknown.map((term) => (
             <li key={term.term} className="transcript-quality-item error">
               <strong>{term.term}</strong>
-              <span>Неизвестный термин, найдено: {term.count}</span>
+              <span>Неизвестный термин, найдено: {term.count}. Добавление означает: считать слово нормальным доменным термином и больше не подсвечивать его как неизвестное.</span>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAddDomainTerm(term.term)}>
-                Добавить в словарь
+                Считать термин нормальным
               </button>
             </li>
           ))}

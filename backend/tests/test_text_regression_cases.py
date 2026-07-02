@@ -7,6 +7,7 @@ REGRESSION_TEXTS = [
     "Перед гонкой Мурманск 1441 километр Лизат 3 железобетонные шпалы",
     "ранжирный парк путь 8р разбросанность материалов ВСП",
     "3 железобетонные шпалы разбросанность материалов МВСП",
+    "Перегон от никиты шомгу 1418 километр пике 8 отсутствует стыковой болт",
 ]
 
 
@@ -18,6 +19,8 @@ def test_regression_texts_have_known_safe_fixes_and_terms():
 
     assert "перегон Кола — Мурманск" in fixed
     assert "лежат" in fixed
+    assert "Магнетиты — Шонгуй" in fixed
+    assert "пикет 8" in fixed
     assert "всп" not in unknown
     assert "мвсп" not in unknown
     assert len(check["issues"]) >= 2

@@ -61,6 +61,37 @@ def _word_pattern(source: str) -> str:
 
 
 def _static_issues(text: str, issues: list[TranscriptIssue]) -> None:
+    for match in re.finditer(rf"{WORD_LEFT}(пике){WORD_RIGHT}", text, flags=re.IGNORECASE):
+        original = match.group(1)
+        _add_issue(issues, TranscriptIssue(
+            start=match.start(1),
+            end=match.end(1),
+            severity="error",
+            title="Похоже на слово «пикет»",
+            description="ASR распознал неполное слово «пике». Для привязки нужно «пикет».",
+            safe_fix=TranscriptSafeFix(
+                replacement="Пикет" if original[:1].isupper() else "пикет",
+                label="Заменить на «пикет»",
+            ),
+        ))
+
+    for match in re.finditer(
+        rf"{WORD_LEFT}((?:магн[еи]т\w*\s*[-–—]?\s*ш[оа](?:н|нг|мг|м)\w*|(?:от\s+)?никит\w*\s+ш[оа](?:н|нг|мг|м)\w*)){WORD_RIGHT}",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        _add_issue(issues, TranscriptIssue(
+            start=match.start(1),
+            end=match.end(1),
+            severity="error",
+            title="Похоже на перегон Магнетиты - Шонгуй",
+            description="ASR часто искажает этот перегон как «никиты шомгу» или похожие варианты.",
+            safe_fix=TranscriptSafeFix(
+                replacement="Магнетиты — Шонгуй",
+                label="Заменить на Магнетиты — Шонгуй",
+            ),
+        ))
+
     for match in re.finditer(
         rf"{WORD_LEFT}(перед\s+гонк(?:ой|а|у)?\s+мурманск(?:ом|а)?){WORD_RIGHT}",
         text,

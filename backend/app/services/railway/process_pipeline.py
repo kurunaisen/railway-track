@@ -11,6 +11,7 @@ from app.services.llm.extract_railway_rows import extract_railway_rows
 from app.services.parser import TranscriptSegment
 from app.services.railway.export_railway_xlsx import export_railway_xlsx
 from app.services.railway.types import RailwayRow
+from app.services.asr_fixes import normalize_asr_text
 from app.services.speech.transcribe_with_yandex import transcribe_with_yandex
 
 
@@ -19,7 +20,7 @@ def transcribe_audio(audio_path: Path) -> tuple[str, list[TranscriptSegment]]:
 
 
 def rows_from_transcript(transcript: str) -> list[RailwayRow]:
-    return extract_railway_rows(transcript)
+    return extract_railway_rows(normalize_asr_text(transcript))
 
 
 def railway_rows_from_job(job: ProcessingJob) -> list[RailwayRow]:

@@ -46,3 +46,16 @@ def test_kola_murmansk_misheard_as_before_race():
 def test_lizat_to_lezhat():
     assert "лежат" in normalize_asr_text("Лизат железобетонные шпалы").lower()
     assert "лизат" not in normalize_asr_text("Лизат железобетонные шпалы").lower()
+
+
+def test_pike_to_piket():
+    fixed = normalize_asr_text("пике 8").lower()
+    assert "пикет 8" in fixed
+    assert " пике " not in f" {fixed} "
+
+
+def test_nikity_shomgu_to_magnetity_shonguy():
+    fixed = normalize_asr_text("Перегон от никиты шомгу 1418 километр")
+    assert "Магнетиты — Шонгуй" in fixed
+    assert "никиты" not in fixed.lower()
+    assert "шомгу" not in fixed.lower()
