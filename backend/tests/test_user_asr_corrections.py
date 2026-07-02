@@ -58,3 +58,14 @@ def test_short_source_correction_uses_word_boundaries(tmp_path, monkeypatch):
 
     assert corr.apply_user_corrections("около станции Кол") == "около станции Кола"
     assert corr.apply_user_corrections("колея 1543") == "колея 1543"
+
+
+def test_can_disable_and_delete_user_correction(tmp_path, monkeypatch):
+    monkeypatch.setattr(corr, "CORRECTIONS_FILE", tmp_path / "asr_corrections.json")
+    corr.add_user_correction("Кла", "Кола", field="uchastok")
+
+    assert corr.apply_user_corrections("станция Кла") == "станция Кола"
+    assert corr.set_user_correction_enabled("Кола", False)
+    assert corr.apply_user_corrections("станция Кла") == "станция Кла"
+    assert corr.delete_user_correction("Кола")
+    assert corr.load_user_corrections() == []

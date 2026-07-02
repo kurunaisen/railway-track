@@ -237,6 +237,62 @@ class ExportRailwayRequest(BaseModel):
     include_source_text: bool = False
 
 
+class TranscriptCheckRequest(BaseModel):
+    transcript: str = Field(min_length=1)
+
+
+class TranscriptSafeFixOut(BaseModel):
+    replacement: str
+    label: str
+
+
+class TranscriptIssueOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    start: int
+    end: int
+    severity: Literal["warning", "error"]
+    title: str
+    description: str
+    source: str = "backend"
+    safeFix: TranscriptSafeFixOut | None = None
+
+
+class TranscriptCheckResponse(BaseModel):
+    issues: list[TranscriptIssueOut] = Field(default_factory=list)
+    unknown_terms: list[dict] = Field(default_factory=list)
+    normalized_text: str
+
+
+class AsrCorrectionOut(BaseModel):
+    target: str
+    sources: list[str] = Field(default_factory=list)
+    field: str | None = None
+    enabled: bool = True
+    count: int = 0
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class AsrCorrectionUpdateRequest(BaseModel):
+    target: str
+    source: str | None = None
+    enabled: bool
+
+
+class UserDomainTermOut(BaseModel):
+    term: str
+    enabled: bool = True
+    created_by: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class UserDomainTermRequest(BaseModel):
+    term: str = Field(min_length=2)
+
+
 class AudioSessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

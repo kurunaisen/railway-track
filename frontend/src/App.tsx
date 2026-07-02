@@ -1,16 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import type { AudioSession } from "./api";
 import {
+  addDomainTerm,
+  checkTranscript,
   canEdit,
   confirmSession,
+  deleteAsrCorrection,
+  deleteDomainTerm,
   exportRailwayRowsXlsx,
   extractRailwayRows,
   getJob,
   getSession,
+  listAsrCorrections,
+  listDomainTerms,
   processSession,
   saveSession,
+  setAsrCorrectionEnabled,
   uploadAudio,
+  type AsrCorrection,
   type RailwayRow,
+  type TranscriptCheckResponse,
+  type UserDomainTerm,
 } from "./api";
 import { type AuthUser, checkHealth, clearAuth, fetchMe, getUser } from "./auth";
 import { healthUrl } from "./config";
@@ -18,6 +28,7 @@ import Login from "./Login";
 import { APP_BRAND_ACCENT, APP_BRAND_MAIN, APP_TAGLINE, DEVELOPER_NAME, DEVELOPER_URL } from "./branding";
 import { FORM_COLUMNS, toDisplayRows } from "./railway/display";
 import {
+  applyTranscriptIssueFix,
   applyTranscriptSafeFixes,
   analyzeTranscriptQuality,
   buildTranscriptQualitySegments,
@@ -114,22 +125,46 @@ function appendTranscriptDraft(current: string, addition: string | null | undefi
   return existing ? `${existing}\n\n${next}` : next;
 }
 
+function rowExplanations(rows: RailwayRow[]): Array<{ index: number; text: string }> {
+  const result: Array<{ index: number; text: string }> = [];
+  rows.forEach((row, index) => {
+    const source = row.sourceText.toLowerCase();
+    const notes = [...row.warnings];
+    if (row.location === "Мурманск" && /(ранжирн|парк\s*рп|парк\s*поп|при[её]мо[-\s]?отправ)/i.test(row.sourceText)) {
+      notes.push("Местонахождение определено по парковому контексту Мурманска.");
+    }
+    if (/перед\s+гонк/i.test(row.sourceText) && row.location?.includes("Мурманск")) {
+      notes.push("Перегон исправлен ASR-правилом: «перед гонкой Мурманск» → «Кола — Мурманск».");
+    }
+    if (source.includes("всп") || source.includes("мвсп")) {
+      notes.push("ВСП/МВСП распознано как материалы верхнего строения пути.");
+    }
+    for (const text of notes) {
+      result.push({ index: index + 1, text });
+    }
+  });
+  return result;
+}
+
 function TranscriptQualityPreview({
   issues,
   segments,
   onApplySafeFixes,
+  onApplySafeFix,
   onSelectIssue,
 }: {
   issues: TranscriptIssue[];
   segments: TranscriptQualitySegment[];
   onApplySafeFixes: () => void;
+  onApplySafeFix: (issue: TranscriptIssue) => void;
   onSelectIssue: (issue: TranscriptIssue) => void;
 }) {
   if (segments.length === 1 && !segments[0].issue && !segments[0].text.trim()) return null;
 
   const errorCount = issues.filter((issue) => issue.severity === "error").length;
   const warningCount = issues.length - errorCount;
-  const safeFixCount = issues.filter((issue) => issue.safeFix).length;
+  const safeFixIssues = issues.filter((issue) => issue.safeFix);
+  const safeFixCount = safeFixIssues.length;
   const visibleIssues = issues.slice(0, 4);
   const hiddenIssueCount = Math.max(0, issues.length - visibleIssues.length);
 
@@ -153,6 +188,25 @@ function TranscriptQualityPreview({
             Исправить безопасные ASR-ошибки ({safeFixCount})
           </button>
           <span className="hint">Применяются только заранее заданные безопасные исправления.</span>
+          <ul className="transcript-quality-list">
+            {safeFixIssues.slice(0, 6).map((issue) => {
+              const original = segments.find((segment) => segment.issue?.id === issue.id)?.text ?? "";
+              const replacement = issue.safeFix?.replacement || "удалить";
+              return (
+                <li key={`fix-${issue.id}`} className="transcript-quality-item warning">
+                  <strong>{original} → {replacement}</strong>
+                  <span>{issue.safeFix?.label}</span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onApplySafeFix(issue)}
+                  >
+                    Применить это
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
       <div className="transcript-quality-text" aria-label="Текст с подсветкой подозрительных фрагментов">
@@ -213,6 +267,77 @@ function TranscriptQualityPreview({
   );
 }
 
+function AsrDictionaryPanel({
+  corrections,
+  domainTerms,
+  unknownTerms,
+  onToggleCorrection,
+  onDeleteCorrection,
+  onAddDomainTerm,
+  onDeleteDomainTerm,
+}: {
+  corrections: AsrCorrection[];
+  domainTerms: UserDomainTerm[];
+  unknownTerms: { term: string; count: number }[];
+  onToggleCorrection: (rule: AsrCorrection, enabled: boolean) => void;
+  onDeleteCorrection: (rule: AsrCorrection, source?: string) => void;
+  onAddDomainTerm: (term: string) => void;
+  onDeleteDomainTerm: (term: string) => void;
+}) {
+  const visibleCorrections = corrections.slice(0, 8);
+  const visibleTerms = domainTerms.slice(0, 8);
+  const visibleUnknown = unknownTerms.slice(0, 8);
+  if (!visibleCorrections.length && !visibleTerms.length && !visibleUnknown.length) return null;
+
+  return (
+    <details className="transcript-quality-details">
+      <summary>Словари и неизвестные термины</summary>
+      {visibleCorrections.length > 0 && (
+        <ul className="transcript-quality-list">
+          {visibleCorrections.map((rule) => (
+            <li key={rule.target} className="transcript-quality-item warning">
+              <strong>{rule.target} = {rule.sources.join(" = ")}</strong>
+              <span>Срабатываний: {rule.count}. Поле: {rule.field ?? "текст"}.</span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onToggleCorrection(rule, !rule.enabled)}>
+                {rule.enabled ? "Отключить" : "Включить"}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onDeleteCorrection(rule)}>
+                Удалить правило
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {visibleUnknown.length > 0 && (
+        <ul className="transcript-quality-list">
+          {visibleUnknown.map((term) => (
+            <li key={term.term} className="transcript-quality-item error">
+              <strong>{term.term}</strong>
+              <span>Неизвестный термин, найдено: {term.count}</span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAddDomainTerm(term.term)}>
+                Добавить в словарь
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {visibleTerms.length > 0 && (
+        <ul className="transcript-quality-list">
+          {visibleTerms.map((term) => (
+            <li key={term.term} className="transcript-quality-item warning">
+              <strong>{term.term}</strong>
+              <span>{term.enabled ? "Активен" : "Отключён"}</span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onDeleteDomainTerm(term.term)}>
+                Удалить термин
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
+  );
+}
+
 async function pollUntilDone(jobId: number, sessionId: number): Promise<AudioSession> {
   for (let i = 0; i < 600; i++) {
     const job = await getJob(jobId);
@@ -240,6 +365,10 @@ export default function App() {
   const [saved, setSaved] = useState(false);
   const [transcriptDraft, setTranscriptDraft] = useState("");
   const [railwayRows, setRailwayRows] = useState<RailwayRow[]>([]);
+  const [transcriptCheckResult, setTranscriptCheckResult] = useState<TranscriptCheckResponse | null>(null);
+  const [asrCorrections, setAsrCorrections] = useState<AsrCorrection[]>([]);
+  const [domainTerms, setDomainTerms] = useState<UserDomainTerm[]>([]);
+  const [lastTranscriptUndo, setLastTranscriptUndo] = useState<{ before: string; message: string } | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [uploadBatch, setUploadBatch] = useState<AudioSession[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -248,6 +377,16 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([]);
 
   const editable = user ? canEdit(user.role) : false;
+
+  const refreshDictionaries = async () => {
+    if (!editable) return;
+    const [corrections, terms] = await Promise.all([
+      listAsrCorrections(),
+      listDomainTerms(),
+    ]);
+    setAsrCorrections(corrections);
+    setDomainTerms(terms);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -289,6 +428,33 @@ export default function App() {
       window.clearTimeout(fallback);
     };
   }, []);
+
+  useEffect(() => {
+    if (!editable) return;
+    void refreshDictionaries().catch(() => {});
+  }, [editable]);
+
+  useEffect(() => {
+    const text = transcriptDraft.trim();
+    if (!editable || !text) {
+      setTranscriptCheckResult(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      checkTranscript(text)
+        .then((result) => {
+          if (!cancelled) setTranscriptCheckResult(result);
+        })
+        .catch(() => {
+          if (!cancelled) setTranscriptCheckResult(null);
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [editable, transcriptDraft]);
 
   const handleFiles = async (files: File[]) => {
     if (!editable || files.length === 0) return;
@@ -507,7 +673,66 @@ export default function App() {
   };
 
   const handleApplyTranscriptSafeFixes = () => {
-    setTranscriptDraft((current) => applyTranscriptSafeFixes(current, analyzeTranscriptQuality(current)));
+    setTranscriptDraft((current) => {
+      const issues = transcriptCheckResult?.issues ?? analyzeTranscriptQuality(current);
+      const next = applyTranscriptSafeFixes(current, issues);
+      if (next !== current) {
+        setLastTranscriptUndo({ before: current, message: "Применены все безопасные исправления" });
+      }
+      return next;
+    });
+  };
+
+  const handleApplyTranscriptIssueFix = (issue: TranscriptIssue) => {
+    setTranscriptDraft((current) => {
+      const original = current.slice(issue.start, issue.end);
+      const replacement = issue.safeFix?.replacement || "удалено";
+      const next = applyTranscriptIssueFix(current, issue);
+      if (next !== current) {
+        setLastTranscriptUndo({ before: current, message: `${original} → ${replacement}` });
+      }
+      return next;
+    });
+  };
+
+  const handleUndoTranscriptFix = () => {
+    if (!lastTranscriptUndo) return;
+    setTranscriptDraft(lastTranscriptUndo.before);
+    setLastTranscriptUndo(null);
+  };
+
+  const handleToggleCorrection = async (rule: AsrCorrection, enabled: boolean) => {
+    try {
+      setAsrCorrections(await setAsrCorrectionEnabled(rule.target, enabled));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось изменить правило");
+    }
+  };
+
+  const handleDeleteCorrection = async (rule: AsrCorrection, source?: string) => {
+    try {
+      setAsrCorrections(await deleteAsrCorrection(rule.target, source));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось удалить правило");
+    }
+  };
+
+  const handleAddDomainTerm = async (term: string) => {
+    try {
+      setDomainTerms(await addDomainTerm(term));
+      setTranscriptCheckResult(await checkTranscript(transcriptDraft));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось добавить термин");
+    }
+  };
+
+  const handleDeleteDomainTerm = async (term: string) => {
+    try {
+      setDomainTerms(await deleteDomainTerm(term));
+      setTranscriptCheckResult(await checkTranscript(transcriptDraft));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось удалить термин");
+    }
   };
 
   const handleSelectTranscriptIssue = (issue: TranscriptIssue) => {
@@ -523,6 +748,7 @@ export default function App() {
 
   const handleTranscriptChange = (value: string) => {
     setTranscriptDraft(value);
+    setLastTranscriptUndo(null);
   };
 
   if (authRequired === null) {
@@ -565,8 +791,10 @@ export default function App() {
   }
 
   const displayRows = toDisplayRows(railwayRows);
+  const tableExplanations = rowExplanations(railwayRows).slice(0, 12);
   const hasTranscript = Boolean(transcriptDraft.trim());
-  const transcriptQualityIssues = analyzeTranscriptQuality(transcriptDraft);
+  const transcriptQualityIssues = transcriptCheckResult?.issues ?? analyzeTranscriptQuality(transcriptDraft);
+  const transcriptUnknownTerms = transcriptCheckResult?.unknown_terms ?? session?.unknown_terms ?? [];
   const transcriptQualitySegments = buildTranscriptQualitySegments(
     transcriptDraft,
     transcriptQualityIssues,
@@ -707,7 +935,25 @@ export default function App() {
               issues={transcriptQualityIssues}
               segments={transcriptQualitySegments}
               onApplySafeFixes={handleApplyTranscriptSafeFixes}
+              onApplySafeFix={handleApplyTranscriptIssueFix}
               onSelectIssue={handleSelectTranscriptIssue}
+            />
+            {lastTranscriptUndo && (
+              <div className="transcript-quality-actions">
+                <span className="hint">Применено: {lastTranscriptUndo.message}</span>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={handleUndoTranscriptFix}>
+                  Отменить
+                </button>
+              </div>
+            )}
+            <AsrDictionaryPanel
+              corrections={asrCorrections}
+              domainTerms={domainTerms}
+              unknownTerms={transcriptUnknownTerms}
+              onToggleCorrection={handleToggleCorrection}
+              onDeleteCorrection={handleDeleteCorrection}
+              onAddDomainTerm={handleAddDomainTerm}
+              onDeleteDomainTerm={handleDeleteDomainTerm}
             />
             <div className="upload-actions" style={{ marginTop: 12 }}>
               <button
@@ -767,6 +1013,19 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+            {tableExplanations.length > 0 && (
+              <details className="transcript-quality-details">
+                <summary>Пояснения к строкам таблицы ({tableExplanations.length})</summary>
+                <ul className="transcript-quality-list">
+                  {tableExplanations.map((item, index) => (
+                    <li key={`${item.index}-${index}`} className="transcript-quality-item warning">
+                      <strong>Строка {item.index}</strong>
+                      <span>{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </section>
         )}
 

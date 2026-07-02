@@ -5,6 +5,7 @@ venv/
 *.db
 uploads/
 uploads/asr_corrections.json
+uploads/domain_terms.json
 .env
 .pytest_cache/
 *.egg-info/

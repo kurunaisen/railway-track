@@ -31,6 +31,8 @@ from app.models import AudioFile, InspectionItem, InspectionRecord, ProcessingJo
 from app.schemas import (
 
     AudioSessionOut,
+    AsrCorrectionOut,
+    AsrCorrectionUpdateRequest,
 
     JobOut,
 
@@ -41,11 +43,15 @@ from app.schemas import (
     SessionSummaryOut,
 
     StructuredRecordsOut,
+    TranscriptCheckRequest,
+    TranscriptCheckResponse,
     TrackRecordCreate,
 
     TrackRecordOut,
 
     TrackRecordUpdate,
+    UserDomainTermOut,
+    UserDomainTermRequest,
 
 )
 
@@ -65,7 +71,19 @@ from app.services.inspection_repository import (
 from app.services.session_cleanup import delete_audio_session
 
 from app.services.session_adapter import _flat_to_track_out, audio_file_to_session_out, audio_file_to_summary
-from app.services.user_asr_corrections import learn_corrections_from_update
+from app.services.transcript_quality import check_transcript_text
+from app.services.user_asr_corrections import (
+    delete_user_correction,
+    learn_corrections_from_update,
+    list_user_corrections,
+    set_user_correction_enabled,
+)
+from app.services.user_domain_terms import (
+    add_user_domain_term,
+    delete_user_domain_term,
+    list_user_domain_terms,
+    set_user_domain_term_enabled,
+)
 
 from app.services.storage import get_storage
 
@@ -92,6 +110,82 @@ MIME_MAP = {
     ".webm": "audio/webm",
 
 }
+
+
+@router.post("/transcript/check", response_model=TranscriptCheckResponse)
+def check_transcript(
+    body: TranscriptCheckRequest,
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    del current
+    return TranscriptCheckResponse(**check_transcript_text(body.transcript))
+
+
+@router.get("/asr-corrections", response_model=list[AsrCorrectionOut])
+def get_asr_corrections(
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    del current
+    return [AsrCorrectionOut(**row) for row in list_user_corrections()]
+
+
+@router.patch("/asr-corrections", response_model=list[AsrCorrectionOut])
+def update_asr_correction(
+    body: AsrCorrectionUpdateRequest,
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    del current
+    set_user_correction_enabled(body.target, body.enabled, body.source)
+    return [AsrCorrectionOut(**row) for row in list_user_corrections()]
+
+
+@router.delete("/asr-corrections", response_model=list[AsrCorrectionOut])
+def remove_asr_correction(
+    target: str,
+    source: str | None = None,
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    del current
+    delete_user_correction(target, source)
+    return [AsrCorrectionOut(**row) for row in list_user_corrections()]
+
+
+@router.get("/domain-terms", response_model=list[UserDomainTermOut])
+def get_domain_terms(
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    del current
+    return [UserDomainTermOut(**row) for row in list_user_domain_terms()]
+
+
+@router.post("/domain-terms", response_model=list[UserDomainTermOut])
+def create_domain_term(
+    body: UserDomainTermRequest,
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    add_user_domain_term(body.term, created_by=current.username)
+    return [UserDomainTermOut(**row) for row in list_user_domain_terms()]
+
+
+@router.patch("/domain-terms/{term}", response_model=list[UserDomainTermOut])
+def update_domain_term(
+    term: str,
+    enabled: bool,
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    del current
+    set_user_domain_term_enabled(term, enabled)
+    return [UserDomainTermOut(**row) for row in list_user_domain_terms()]
+
+
+@router.delete("/domain-terms/{term}", response_model=list[UserDomainTermOut])
+def remove_domain_term(
+    term: str,
+    current: CurrentUser = Depends(require_role("operator")),
+):
+    del current
+    delete_user_domain_term(term)
+    return [UserDomainTermOut(**row) for row in list_user_domain_terms()]
 
 
 def _audio_content_type(filename: str, mime_type: str | None) -> str:

@@ -90,6 +90,24 @@ def load_user_corrections() -> list[dict[str, Any]]:
     return rows if isinstance(rows, list) else []
 
 
+def list_user_corrections() -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for row in load_user_corrections():
+        target = _clean(row.get("target"))
+        if not target:
+            continue
+        result.append({
+            "target": target,
+            "sources": _row_sources(row),
+            "field": row.get("field"),
+            "enabled": bool(row.get("enabled", True)),
+            "count": int(row.get("count") or 0),
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        })
+    return result
+
+
 def _row_sources(row: dict[str, Any]) -> list[str]:
     result: list[str] = []
     raw_sources = row.get("sources")
@@ -171,6 +189,7 @@ def add_user_correction(
         "sources": [source_clean],
         "target": target_clean,
         "field": field,
+        "enabled": True,
         "created_by": created_by,
         "created_at": _now_iso(),
         "updated_at": _now_iso(),
@@ -199,11 +218,67 @@ def learn_corrections_from_update(
     return learned
 
 
+def set_user_correction_enabled(target: str, enabled: bool, source: str | None = None) -> bool:
+    target_key = _key(target)
+    source_key = _key(source) if source else None
+    payload = _load_payload()
+    changed = False
+    for row in payload.get("replacements", []):
+        row_target = _clean(row.get("target"))
+        if not row_target or _key(row_target) != target_key:
+            continue
+        if source_key:
+            sources = _row_sources(row)
+            if not any(_key(item) == source_key for item in sources):
+                continue
+        row["enabled"] = enabled
+        row["updated_at"] = _now_iso()
+        changed = True
+    if changed:
+        _write_payload(payload)
+    return changed
+
+
+def delete_user_correction(target: str, source: str | None = None) -> bool:
+    target_key = _key(target)
+    source_key = _key(source) if source else None
+    payload = _load_payload()
+    rows = payload.get("replacements", [])
+    if not isinstance(rows, list):
+        return False
+    changed = False
+    next_rows: list[dict[str, Any]] = []
+    for row in rows:
+        row_target = _clean(row.get("target"))
+        if not row_target or _key(row_target) != target_key:
+            next_rows.append(row)
+            continue
+        if not source_key:
+            changed = True
+            continue
+        sources = [item for item in _row_sources(row) if _key(item) != source_key]
+        if len(sources) != len(_row_sources(row)):
+            changed = True
+            if sources:
+                row["sources"] = sources
+                row.pop("source", None)
+                row["updated_at"] = _now_iso()
+                next_rows.append(row)
+            continue
+        next_rows.append(row)
+    if changed:
+        payload["replacements"] = next_rows
+        _write_payload(payload)
+    return changed
+
+
 def apply_user_corrections(text: str) -> str:
     if not text:
         return text
     fixed = text
     for row in load_user_corrections():
+        if not row.get("enabled", True):
+            continue
         target = _clean(row.get("target"))
         if not target:
             continue

@@ -3,6 +3,7 @@ import { apiBase } from "./config";
 import type { RailwayRow } from "./railway/types";
 import { parseRailwayRowsPayload } from "./railway/schema";
 import { normalizeRailwayRows } from "./railway/normalizeRailwayRows";
+import type { TranscriptIssue } from "./railway/transcriptQuality";
 
 export type { RailwayRow };
 
@@ -103,6 +104,30 @@ export interface AudioSession {
   railway_rows: RailwayRow[];
 }
 
+export interface TranscriptCheckResponse {
+  issues: TranscriptIssue[];
+  unknown_terms: { term: string; count: number; context?: string }[];
+  normalized_text: string;
+}
+
+export interface AsrCorrection {
+  target: string;
+  sources: string[];
+  field: string | null;
+  enabled: boolean;
+  count: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface UserDomainTerm {
+  term: string;
+  enabled: boolean;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 const API = apiBase();
 
 /** Бэкенд может вернуть урезанный объект — заполняем обязательные поля, чтобы UI не падал. */
@@ -195,6 +220,59 @@ export async function extractRailwayRows(
   const data = await res.json();
   const rows = parseRailwayRowsPayload(data);
   return normalizeRailwayRows(rows);
+}
+
+export async function checkTranscript(transcript: string): Promise<TranscriptCheckResponse> {
+  const res = await apiFetch(`${API}/transcript/check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transcript }),
+  });
+  return res.json();
+}
+
+export async function listAsrCorrections(): Promise<AsrCorrection[]> {
+  const res = await apiFetch(`${API}/asr-corrections`);
+  return res.json();
+}
+
+export async function setAsrCorrectionEnabled(
+  target: string,
+  enabled: boolean,
+  source?: string,
+): Promise<AsrCorrection[]> {
+  const res = await apiFetch(`${API}/asr-corrections`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target, enabled, source }),
+  });
+  return res.json();
+}
+
+export async function deleteAsrCorrection(target: string, source?: string): Promise<AsrCorrection[]> {
+  const query = new URLSearchParams({ target });
+  if (source) query.set("source", source);
+  const res = await apiFetch(`${API}/asr-corrections?${query.toString()}`, { method: "DELETE" });
+  return res.json();
+}
+
+export async function listDomainTerms(): Promise<UserDomainTerm[]> {
+  const res = await apiFetch(`${API}/domain-terms`);
+  return res.json();
+}
+
+export async function addDomainTerm(term: string): Promise<UserDomainTerm[]> {
+  const res = await apiFetch(`${API}/domain-terms`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ term }),
+  });
+  return res.json();
+}
+
+export async function deleteDomainTerm(term: string): Promise<UserDomainTerm[]> {
+  const res = await apiFetch(`${API}/domain-terms/${encodeURIComponent(term)}`, { method: "DELETE" });
+  return res.json();
 }
 
 export async function exportRailwayRowsXlsx(

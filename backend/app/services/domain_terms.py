@@ -329,6 +329,10 @@ def is_known_domain_word(word: str) -> bool:
     normalized = _normalize_token(word)
     if not normalized or normalized.isdigit():
         return True
+    from app.services.user_domain_terms import user_domain_term_values
+
+    if normalized in user_domain_term_values():
+        return True
     if normalized in KNOWN_TERMS:
         return True
     return any(normalized.startswith(stem) for stem in KNOWN_STEMS)

@@ -340,11 +340,16 @@ export function applyTranscriptSafeFixes(text: string, issues: TranscriptIssue[]
     .sort((a, b) => b.start - a.start);
   let next = text;
   for (const issue of fixes) {
-    const before = next.slice(0, issue.start).replace(/[ \t]+$/, "");
-    const after = next.slice(issue.end).replace(/^[ \t]+/, "");
-    const replacement = issue.safeFix?.replacement ?? "";
-    const joiner = before && after && replacement === "" ? " " : "";
-    next = `${before}${replacement}${joiner}${after}`;
+    next = applyTranscriptIssueFix(next, issue);
   }
   return next.replace(/[ \t]{2,}/g, " ");
+}
+
+export function applyTranscriptIssueFix(text: string, issue: TranscriptIssue): string {
+  if (!issue.safeFix) return text;
+  const before = text.slice(0, issue.start).replace(/[ \t]+$/, "");
+  const after = text.slice(issue.end).replace(/^[ \t]+/, "");
+  const replacement = issue.safeFix.replacement;
+  const joiner = before && after && replacement === "" ? " " : "";
+  return `${before}${replacement}${joiner}${after}`.replace(/[ \t]{2,}/g, " ");
 }
