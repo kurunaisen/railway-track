@@ -149,6 +149,23 @@ function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
     });
   }
 
+  const lizatRe = new RegExp(`${WORD_LEFT}лизат${WORD_RIGHT}`, "giu");
+  for (const match of text.matchAll(lizatRe)) {
+    const start = match.index ?? 0;
+    const original = match[0];
+    addIssue(issues, {
+      start,
+      end: start + original.length,
+      severity: "error",
+      title: "Похоже на слово «лежат»",
+      description: "ASR распознал слово как «лизат». В этом контексте, скорее всего, имелось в виду «лежат».",
+      safeFix: {
+        replacement: original[0] === original[0]?.toUpperCase() ? "Лежат" : "лежат",
+        label: "Заменить на «лежат»",
+      },
+    });
+  }
+
   const magnetityShonguyRe = new RegExp(
     `${WORD_LEFT}(?<name>(?:магн[еи]т${WORD_TAIL}\\s*[-–—]?\\s*ш[оа](?:н|нг|мг|м)${WORD_TAIL}|(?:от\\s+)?никит${WORD_TAIL}\\s+ш[оа](?:н|нг|мг|м)${WORD_TAIL}))${WORD_RIGHT}`,
     "giu",

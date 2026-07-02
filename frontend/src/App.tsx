@@ -152,7 +152,7 @@ function TranscriptQualityPreview({
           <button type="button" className="btn btn-secondary btn-sm" onClick={onApplySafeFixes}>
             Исправить безопасные ASR-ошибки ({safeFixCount})
           </button>
-          <span className="hint">Удаляются только очевидные лишние числа перед корректной шириной колеи.</span>
+          <span className="hint">Применяются только заранее заданные безопасные исправления.</span>
         </div>
       )}
       <div className="transcript-quality-text" aria-label="Текст с подсветкой подозрительных фрагментов">

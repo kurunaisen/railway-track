@@ -53,3 +53,17 @@ def test_is_known_domain_word_stems():
     assert is_known_domain_word("уширение")
     assert is_known_domain_word("главный")
     assert not is_known_domain_word("абракадабра")
+
+
+def test_vsp_material_terms_not_unknown():
+    text = "3 железобетонные шпалы разбросанность материалов ВСП и МВСП"
+    terms = {t["term"] for t in detect_unknown_terms(text)}
+    for word in (
+        "железобетонные",
+        "разбросанность",
+        "материалов",
+        "всп",
+        "мвсп",
+    ):
+        assert is_known_domain_word(word), word
+        assert word not in terms, f"{word} не должно попадать в unknown_terms"

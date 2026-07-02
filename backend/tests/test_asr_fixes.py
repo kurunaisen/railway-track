@@ -41,3 +41,8 @@ def test_kola_murmansk_misheard_as_before_race():
     fixed = normalize_asr_text(text)
     assert "перегон Кола — Мурманск" in fixed
     assert "перед гонкой" not in fixed.lower()
+
+
+def test_lizat_to_lezhat():
+    assert "лежат" in normalize_asr_text("Лизат железобетонные шпалы").lower()
+    assert "лизат" not in normalize_asr_text("Лизат железобетонные шпалы").lower()
