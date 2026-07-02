@@ -171,6 +171,9 @@ def _extract_put(text: str) -> str | None:
         return m.group(1)
     m = re.search(r"путь\s*(?:№|номер|n)?\s*(\d+)", text, re.IGNORECASE)
     if m:
+        tail = text[m.end() : m.end() + 12]
+        if re.match(r"\s+звен", tail, re.IGNORECASE):
+            return None
         return m.group(1)
     m = re.search(
         r"путь\s+(?:№|номер|n)?\s*([а-яa-z\u0430-\u044f]+)",

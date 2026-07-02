@@ -97,7 +97,7 @@ def _segment_rows_preferred(
     if not segment_rows:
         return False
     if len(records) != len(segment_rows):
-        return True
+        return len(segment_rows) > len(records)
     for rec, seg in zip(records, segment_rows):
         if (seg.put or "") != (rec.put or ""):
             return True

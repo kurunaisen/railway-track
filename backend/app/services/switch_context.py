@@ -44,7 +44,8 @@ def _apply_segment_to_record(
     inherited_switch: str | None,
 ) -> str | None:
     seg_put, seg_switch, inherited_switch = _resolve_segment_location(part, inherited_switch)
-    record.put = seg_put
+    if seg_put is not None:
+        record.put = seg_put
     record.switch = seg_switch
     return inherited_switch
 
@@ -85,7 +86,8 @@ def propagate_switch_context(
         for record in records:
             if record.logical_record_index != idx:
                 continue
-            record.put = seg_put
+            if seg_put is not None:
+                record.put = seg_put
             record.switch = seg_switch
 
     return records

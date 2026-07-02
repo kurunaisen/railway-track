@@ -34,3 +34,10 @@ def test_collapses_whitespace():
 def test_ostrii_to_ostrie():
     assert "острие остряка" in normalize_asr_text("в острии остряка").lower()
     assert "острии" not in normalize_asr_text("в острии остряка").lower()
+
+
+def test_kola_murmansk_misheard_as_before_race():
+    text = "Перед гонкой Мурманск 2 путь просадка 12 мм"
+    fixed = normalize_asr_text(text)
+    assert "перегон Кола — Мурманск" in fixed
+    assert "перед гонкой" not in fixed.lower()

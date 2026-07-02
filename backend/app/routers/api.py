@@ -65,6 +65,7 @@ from app.services.inspection_repository import (
 from app.services.session_cleanup import delete_audio_session
 
 from app.services.session_adapter import _flat_to_track_out, audio_file_to_session_out, audio_file_to_summary
+from app.services.user_asr_corrections import learn_corrections_from_update
 
 from app.services.storage import get_storage
 
@@ -597,6 +598,13 @@ def update_record(
     data = payload.model_dump(exclude_unset=True)
 
     data.pop("row_order", None)
+
+    before_row = flat_row_from_item(item, insp_rec, insp_rec.job.audio_file_id, 0)
+    learn_corrections_from_update(
+        before_row.__dict__,
+        data,
+        created_by=current.username,
+    )
 
     apply_flat_update(item, insp_rec, data)
 

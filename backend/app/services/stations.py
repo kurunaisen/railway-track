@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import re
 
+from app.services.railway_explications import (
+    explication_station_names,
+    normalize_explication_station_name,
+)
+
 # Станции и раздельные пункты (географический порядок: Кандalaksha → Ваенга)
-CANONICAL_STATIONS: tuple[str, ...] = (
+_BASE_CANONICAL_STATIONS: tuple[str, ...] = (
     "\u041a\u0430\u043d\u0434\u0430\u043b\u0430\u043a\u0448\u0430",
     "Алюминиевый Завод",
     "Плесозеро",
@@ -42,6 +47,10 @@ CANONICAL_STATIONS: tuple[str, ...] = (
     "Промышленная",
     "Сафоново-Мурманское",
     "Ваенга",
+)
+
+CANONICAL_STATIONS: tuple[str, ...] = tuple(
+    dict.fromkeys((*_BASE_CANONICAL_STATIONS, *explication_station_names()))
 )
 
 CANONICAL_BLOCKPOSTS: tuple[str, ...] = (
@@ -118,6 +127,10 @@ def normalize_station_name(value: str | None) -> str | None:
     key = _location_key(raw)
     if key in _CANONICAL_BY_KEY:
         return _CANONICAL_BY_KEY[key]
+
+    explication_name = normalize_explication_station_name(raw)
+    if explication_name:
+        return explication_name
 
     return raw
 

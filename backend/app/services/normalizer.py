@@ -29,6 +29,15 @@ from app.services.switch_measurement import apply_switch_measurement_context
 from app.config import settings
 from app.services.track_norms import apply_track_norms_all
 from app.services.canonical_model import _location_only_fragment
+from app.services.railway_explications import (
+    normalize_asset_number,
+    normalize_explication_station_name,
+    path_for_station_switch,
+    station_has_path,
+    station_has_paths,
+    station_has_switch,
+    station_has_switches,
+)
 
 ORDINAL_PUT = {
     "перв": "1",
@@ -65,6 +74,9 @@ UNIT_NORMALIZE = {
 def normalize_put(value: str | None) -> str | None:
     if not value:
         return value
+    asset_number = normalize_asset_number(value)
+    if asset_number and (asset_number.isdigit() or re.fullmatch(r"\d+/\d+", asset_number)):
+        return asset_number
     v = value.strip().lower()
     if v.isdigit():
         return v
@@ -315,6 +327,39 @@ def _clear_ungrounded_speed_limit(record: ParsedRecord, *, apply_track_norms: bo
         record.speed_limit = None
 
 
+def _mark_disputed(record: ParsedRecord, field: str) -> None:
+    if field not in record.disputed_fields:
+        record.disputed_fields.append(field)
+
+
+def apply_explication_context(records: list[ParsedRecord]) -> list[ParsedRecord]:
+    """Sverka station assets against explication reference tables."""
+    for record in records:
+        station = normalize_explication_station_name(record.uchastok)
+        if not station:
+            continue
+        record.uchastok = station
+        record.put = normalize_put(record.put)
+        record.switch = normalize_asset_number(record.switch)
+
+        if record.switch and not record.put:
+            known_path = path_for_station_switch(station, record.switch)
+            if known_path:
+                record.put = known_path
+
+        if record.put and station_has_paths(station) and not station_has_path(station, record.put):
+            _mark_disputed(record, "put")
+        if record.switch and station_has_switches(station) and not station_has_switch(station, record.switch):
+            _mark_disputed(record, "switch")
+
+        known_switch_path = path_for_station_switch(station, record.switch)
+        if record.put and known_switch_path and record.put != known_switch_path:
+            _mark_disputed(record, "put")
+            _mark_disputed(record, "switch")
+
+    return records
+
+
 def normalize_all(
     records: list[ParsedRecord],
     source_text: str | None = None,
@@ -339,6 +384,7 @@ def normalize_all(
         records = reconcile_records_by_asr_segments(records, source_text)
     records = apply_switch_measurement_context(records)
     records = [normalize_record(r) for r in records]
+    records = apply_explication_context(records)
     if apply_track_norms:
         records = apply_track_norms_all(records)
     for record in records:

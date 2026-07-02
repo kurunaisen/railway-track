@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import re
 
+from app.services.user_asr_corrections import apply_user_corrections
+
 _PUST_RE = re.compile(r"\bпусть\b", re.IGNORECASE)
 _KOLI_RE = re.compile(r"\bколи\b", re.IGNORECASE)
 _OSTRII_RE = re.compile(r"\bострии\s+остряка\b", re.IGNORECASE)
 _STRP_RE = re.compile(r"\bстр[.\s]*п[.\s]?\b", re.IGNORECASE)
+_KOLA_MURMANSK_ASR_RE = re.compile(
+    r"\bперед\s+гонк(?:ой|а|у)?\s+мурманск(?:ом|а)?\b",
+    re.IGNORECASE,
+)
 _WS_RE = re.compile(r"\s+")
 
 
@@ -18,6 +24,8 @@ def normalize_asr_text(text: str) -> str:
     fixed = _KOLI_RE.sub("колеи", fixed)
     fixed = _OSTRII_RE.sub("острие остряка", fixed)
     fixed = _STRP_RE.sub("стрелочный перевод ", fixed)
+    fixed = _KOLA_MURMANSK_ASR_RE.sub("перегон Кола — Мурманск", fixed)
+    fixed = apply_user_corrections(fixed)
     return _WS_RE.sub(" ", fixed).strip()
 
 
