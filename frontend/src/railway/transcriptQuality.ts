@@ -128,6 +128,27 @@ function collectGaugeIssues(text: string, issues: DraftIssue[]): void {
 }
 
 function collectRailwayTermIssues(text: string, issues: DraftIssue[]): void {
+  const kolaMurmanskMisheardRe = new RegExp(
+    `${WORD_LEFT}(?<name>перед\\s+гонк(?:ой|а|у)?\\s+мурманск(?:ом|а)?)${WORD_RIGHT}`,
+    "giu",
+  );
+  for (const match of text.matchAll(kolaMurmanskMisheardRe)) {
+    const name = match.groups?.name ?? "";
+    const start = (match.index ?? 0) + match[0].indexOf(name);
+    const end = start + name.length;
+    addIssue(issues, {
+      start,
+      end,
+      severity: "error",
+      title: "Похоже на перегон Кола - Мурманск",
+      description: "ASR распознал «перегон Кола-Мурманск» как «перед гонкой Мурманск».",
+      safeFix: {
+        replacement: "перегон Кола — Мурманск",
+        label: "Заменить на перегон Кола — Мурманск",
+      },
+    });
+  }
+
   const magnetityShonguyRe = new RegExp(
     `${WORD_LEFT}(?<name>(?:магн[еи]т${WORD_TAIL}\\s*[-–—]?\\s*ш[оа](?:н|нг|мг|м)${WORD_TAIL}|(?:от\\s+)?никит${WORD_TAIL}\\s+ш[оа](?:н|нг|мг|м)${WORD_TAIL}))${WORD_RIGHT}`,
     "giu",

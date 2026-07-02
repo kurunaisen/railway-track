@@ -24,6 +24,27 @@ ROMAN_PATHS = {
     "X": "10",
 }
 
+PARK_ALIASES: dict[str, tuple[str, str]] = {
+    "ранжирный парк": ("Мурманск", "РП"),
+    "ранжирный": ("Мурманск", "РП"),
+    "парк рп": ("Мурманск", "РП"),
+    "рп": ("Мурманск", "РП"),
+    "приемоотправочный парк": ("Мурманск", "ПОП"),
+    "приемо отправочный парк": ("Мурманск", "ПОП"),
+    "приемо-отправочный парк": ("Мурманск", "ПОП"),
+    "приемоотправочный": ("Мурманск", "ПОП"),
+    "приемо отправочный": ("Мурманск", "ПОП"),
+    "приемо-отправочный": ("Мурманск", "ПОП"),
+    "парк поп": ("Мурманск", "ПОП"),
+    "поп": ("Мурманск", "ПОП"),
+    "сортировочный парк": ("Мурманск", "СП"),
+    "парк сп": ("Мурманск", "СП"),
+    "фоп": ("Мурманск", "ФОП"),
+    "парк фоп": ("Мурманск", "ФОП"),
+    "гд": ("Мурманск", "ГД"),
+    "парк гд": ("Мурманск", "ГД"),
+}
+
 
 def _key(value: str | None) -> str:
     if not value:
@@ -77,6 +98,21 @@ def normalize_explication_station_name(value: str | None) -> str | None:
     if not value:
         return None
     return _station_by_key().get(_key(value))
+
+
+def match_station_by_park(text: str | None) -> tuple[str, str] | None:
+    if not text:
+        return None
+    key = _key(text)
+    matches: list[tuple[str, str, str]] = []
+    for alias, payload in PARK_ALIASES.items():
+        alias_key = _key(alias)
+        if re.search(rf"(?<!\w){re.escape(alias_key)}(?!\w)", key):
+            matches.append((alias_key, payload[0], payload[1]))
+    if not matches:
+        return None
+    _, station, park = max(matches, key=lambda item: len(item[0]))
+    return station, park
 
 
 def _station_payload(section: str, station: str | None) -> list[dict[str, Any]]:

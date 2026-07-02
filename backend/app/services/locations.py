@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from app.services.peregons import normalize_peregon
+from app.services.railway_explications import match_station_by_park
 from app.services.stations import (
     CANONICAL_STATIONS,
     match_location_in_text,
@@ -75,6 +76,10 @@ def extract_single_location(*texts: str | None) -> str | None:
             continue
 
         stripped = _strip_station_prefix(raw)
+        park_match = match_station_by_park(stripped)
+        if park_match:
+            return park_match[0]
+
         blockpost = normalize_blockpost(stripped)
         if blockpost:
             return blockpost
@@ -90,6 +95,10 @@ def extract_single_location(*texts: str | None) -> str | None:
         matched = match_location_in_text(stripped)
         if matched:
             return matched
+
+        park_match = match_station_by_park(raw)
+        if park_match:
+            return park_match[0]
 
         if re.search(r"^станци[яи]\s+", raw, re.IGNORECASE):
             name = _strip_station_prefix(raw)
