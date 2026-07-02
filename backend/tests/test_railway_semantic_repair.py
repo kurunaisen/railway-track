@@ -114,11 +114,17 @@ def test_repair_known_magnetity_shonguy_aliases():
                 sourceText="магнитит шон 249 км пикет 8 уширение рельсовой колеи 1543 мм",
                 defect="уширение рельсовой колеи 1543 мм",
             ),
+            _row(
+                location="Перегон Магнетиты - шомгу",
+                sourceText="Перегон Магнетиты - шомгу 1418 км пикет 4 отсутствует 2 закладных болта",
+                defect="отсутствует 2 закладных болта",
+            ),
         ]
     )
 
     assert rows[0].location == "Перегон Магнетиты - Шонгуй"
     assert rows[1].location == "Перегон Магнетиты - Шонгуй"
+    assert rows[2].location == "Перегон Магнетиты - Шонгуй"
 
 
 def test_repair_keeps_km_pk_reference_without_meter():
