@@ -322,12 +322,10 @@ export async function deleteSession(sessionId: number): Promise<void> {
 
 export async function deleteSessionsBatch(sessionIds: number[]): Promise<void> {
   if (sessionIds.length === 0) return;
-  if (sessionIds.length === 1) {
-    await deleteSession(sessionIds[0]);
-    return;
+  // Delete one-by-one to avoid server/proxy timeouts when storage cleanup is slow.
+  for (const sessionId of sessionIds) {
+    await deleteSession(sessionId);
   }
-  const query = encodeURIComponent(sessionIds.join(","));
-  await apiFetch(`${API}/sessions/batch?session_ids=${query}`, { method: "DELETE" });
 }
 
 export async function downloadBatchExcel(sessionIds: number[]): Promise<void> {
